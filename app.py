@@ -26,6 +26,7 @@ from copilot.session_events import (
 
 from agent_config import SYSTEM_PROMPT, AGENT_NAME, AGENT_VERSION
 from tools import ALL_TOOLS
+from tools.memory import get_profile_context
 
 # Terminal colours
 BLUE = "\033[34m"
@@ -60,10 +61,14 @@ async def main():
     client = CopilotClient()
     await client.start()
 
+    # Inject saved family profile into the system prompt
+    profile_context = get_profile_context()
+    system_prompt = SYSTEM_PROMPT + profile_context
+
     session = await client.create_session(
         on_permission_request=PermissionHandler.approve_all,
         tools=ALL_TOOLS,
-        system_message={"content": SYSTEM_PROMPT},
+        system_message={"content": system_prompt},
         streaming=True,
     )
 
