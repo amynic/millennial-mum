@@ -55,7 +55,7 @@ millennial-mum/
 ## Next: Deploy to Microsoft Foundry
 
 Once running locally, this agent can be wrapped with the Microsoft Agent Framework 
-hosting adapter and deployed to Azure AI Foundry as a hosted agent with:
+hosting adapter and deployed to Microsoft Foundry as a hosted agent with:
 - Hosted models (GPT-4o, GPT-5)
 - Foundry Toolbox (web search, AI search, etc.)
 - Production eval & tracing
