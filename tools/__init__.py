@@ -5,6 +5,10 @@ from .budget import log_expense, get_weekly_summary
 from .admin import draft_email
 from .shopping_list import add_to_shopping_list, get_shopping_list, mark_bought, clear_shopping_list
 from .emergency import emergency_quick_ref
+from .memory import (
+    save_child, save_work_schedule, save_childcare,
+    save_family_info, get_family_profile, get_profile_context,
+)
 
 ALL_TOOLS = [
     suggest_meal,
@@ -21,4 +25,9 @@ ALL_TOOLS = [
     mark_bought,
     clear_shopping_list,
     emergency_quick_ref,
+    save_child,
+    save_work_schedule,
+    save_childcare,
+    save_family_info,
+    get_family_profile,
 ]
