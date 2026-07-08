@@ -11,7 +11,7 @@
     "cpu": "1",
     "memory": "2Gi",
     "environment_variables": {
-      "GITHUB_TOKEN": "REDACTED_TOKEN"
+      "GITHUB_TOKEN": "${GITHUB_TOKEN}"
     },
     "code_configuration": {
       "runtime": "python_3_13",
