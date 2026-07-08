@@ -25,14 +25,18 @@ logger = logging.getLogger(AGENT_NAME)
 
 app = ResponsesAgentServerHost()
 
-# Enable CORS for local development (file:// and localhost origins)
-from starlette.middleware.cors import CORSMiddleware
+# CORS: restrict to known origins in production
+ALLOWED_ORIGINS = [
+    "https://blue-field-0a7fff90f.7.azurestaticapps.net",
+    "http://localhost:4280",
+    "http://127.0.0.1:4280",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 

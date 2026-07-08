@@ -73,9 +73,15 @@ function appendMessage(role, content) {
     chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 function formatContent(text) {
-    // Convert markdown-like formatting to HTML
-    let html = text
+    // Escape HTML entities first to prevent XSS
+    let html = escapeHtml(text)
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/`(.*?)`/g, '<code>$1</code>');

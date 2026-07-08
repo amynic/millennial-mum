@@ -72,7 +72,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     except Exception as e:
         logging.error(f"Auth failed: {e}")
         return func.HttpResponse(
-            json.dumps({"reply": f"⚠️ Authentication error: {str(e)[:200]}"}),
+            json.dumps({"reply": "⚠️ Authentication unavailable. Please try again later."}),
             status_code=500,
             mimetype="application/json",
         )
