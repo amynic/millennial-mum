@@ -1,0 +1,13 @@
+name: millennial-mum
+description: >
+  The ultimate AI copilot for working parents with small children (ages 0-7).
+  Helps with meal planning, schedules, activities, budgeting, admin tasks,
+  and emergency health guidance.
+template:
+  kind: hosted
+  protocols:
+    - name: responses
+      version: "2025-03-01"
+  environment_variables:
+    - name: GITHUB_TOKEN
+      description: GitHub token with Copilot scope for the Copilot SDK

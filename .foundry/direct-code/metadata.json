@@ -1,0 +1,22 @@
+{
+  "description": "Millennial Mum parenting copilot powered by GitHub Copilot SDK",
+  "definition": {
+    "kind": "hosted",
+    "protocol_versions": [
+      {
+        "protocol": "responses",
+        "version": "1.0.0"
+      }
+    ],
+    "cpu": "1",
+    "memory": "2Gi",
+    "environment_variables": {
+      "GITHUB_TOKEN": "REDACTED_TOKEN"
+    },
+    "code_configuration": {
+      "runtime": "python_3_13",
+      "entry_point": ["python", "main.py"],
+      "dependency_resolution": "remote_build"
+    }
+  }
+}

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Millennial Mum 🍼💼</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <h1>🍼💼 Millennial Mum</h1>
+            <p class="subtitle">The ultimate copilot for working parents</p>
+        </header>
+
+        <main class="chat-container" id="chatContainer">
+            <div class="message assistant">
+                <div class="message-content">
+                    <p>👋 Hey! I'm <strong>Millennial Mum</strong> — your AI copilot for juggling parenting and work.</p>
+                    <p>Try asking me:</p>
+                    <ul>
+                        <li>"What can I make for dinner with chicken, rice and broccoli?"</li>
+                        <li>"Help me plan this week's schedule"</li>
+                        <li>"My toddler is bored and it's raining"</li>
+                        <li>"Draft an email to school — Lily is off sick today"</li>
+                    </ul>
+                </div>
+            </div>
+        </main>
+
+        <footer class="input-area">
+            <form id="chatForm" class="input-form">
+                <input
+                    type="text"
+                    id="userInput"
+                    placeholder="Ask me anything about parenting, meals, schedules..."
+                    autocomplete="off"
+                    autofocus
+                />
+                <button type="submit" id="sendBtn" title="Send">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 2L11 13"></path>
+                        <path d="M22 2L15 22L11 13L2 9L22 2Z"></path>
+                    </svg>
+                </button>
+            </form>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
