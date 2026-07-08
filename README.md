@@ -143,3 +143,8 @@ swa deploy \
 
 Update `AGENT_ENDPOINT` in `frontend/app.js` to your Foundry agent URL before deploying.
 
+Once running locally, this agent can be wrapped with the Microsoft Agent Framework
+hosting adapter and deployed to Microsoft Foundry as a hosted agent with:
+- Hosted models (GPT-4o, GPT-5)
+- Foundry Toolbox (web search, AI search, etc.)
+- Production eval & tracing

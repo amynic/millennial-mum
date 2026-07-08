@@ -272,7 +272,7 @@ class EmergencyQuickRefParams(BaseModel):
     symptom: str = Field(description="The symptom or emergency to look up. Examples: 'fever', 'choking', 'rash', 'burns', 'head injury', 'breathing difficulty', 'vomiting', 'diarrhoea', 'seizure', 'allergic reaction'")
 
 
-@define_tool(description="Toddler Down 🚨 — Emergency quick-reference for toddler health concerns. Uses ONLY official NHS sources (nhs.uk). Returns immediate actions, do-not warnings, when to go to hospital, and when to call 111.")
+@define_tool(description="Toddler Down 🚨 — Emergency quick-reference for toddler health concerns. Uses ONLY official NHS sources (nhs.uk). Returns immediate actions, do-not warnings, when to go to hospital, and when to call 111.", skip_permission=True)
 async def emergency_quick_ref(params: EmergencyQuickRefParams) -> str:
     """Look up toddler emergency quick-reference guidance from official NHS sources."""
     # Normalise input
