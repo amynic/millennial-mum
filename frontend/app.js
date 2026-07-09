@@ -7,6 +7,7 @@ const sendBtn = document.getElementById('sendBtn');
 const API_ENDPOINT = '/api/chat';
 
 let isProcessing = false;
+let previousResponseId = null;  // Track conversation thread
 
 chatForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -20,10 +21,15 @@ chatForm.addEventListener('submit', async (e) => {
     const typingEl = showTypingIndicator();
 
     try {
+        const requestBody = { message };
+        if (previousResponseId) {
+            requestBody.previous_response_id = previousResponseId;
+        }
+
         const response = await fetch(API_ENDPOINT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message }),
+            body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {
@@ -32,6 +38,11 @@ chatForm.addEventListener('submit', async (e) => {
 
         const data = await response.json();
         removeTypingIndicator(typingEl);
+
+        // Track response ID for conversation continuity
+        if (data.response_id) {
+            previousResponseId = data.response_id;
+        }
 
         appendMessage('assistant', data.reply || 'No response received.');
     } catch (error) {

@@ -57,6 +57,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         )
 
     user_message = body.get("message", "")
+    previous_response_id = body.get("previous_response_id")
     if not user_message:
         return func.HttpResponse(
             json.dumps({"reply": "Missing 'message' field"}),
@@ -74,7 +75,10 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json",
         )
 
-    payload = json.dumps({"input": user_message}).encode("utf-8")
+    request_body = {"input": user_message}
+    if previous_response_id:
+        request_body["previous_response_id"] = previous_response_id
+    payload = json.dumps(request_body).encode("utf-8")
     url = f"{FOUNDRY_AGENT_ENDPOINT}?api-version={API_VERSION}"
 
     request = urllib.request.Request(
@@ -107,8 +111,9 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json",
         )
 
-    # Extract the assistant reply
+    # Extract the assistant reply and response ID for conversation threading
     reply = "Sorry, I couldn't generate a response."
+    response_id = data.get("id")
     for item in data.get("output", []):
         if item.get("type") == "message" and item.get("role") == "assistant":
             for block in item.get("content", []):
@@ -117,7 +122,11 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                     break
             break
 
+    response_payload = {"reply": reply}
+    if response_id:
+        response_payload["response_id"] = response_id
+
     return func.HttpResponse(
-        json.dumps({"reply": reply}),
+        json.dumps(response_payload),
         mimetype="application/json",
     )
