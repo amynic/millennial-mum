@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 load_dotenv(override=False)
 
 from azure.ai.agentserver.responses import ResponsesAgentServerHost
+from starlette.middleware.cors import CORSMiddleware
 
 from copilot import CopilotClient
 from copilot.session import PermissionHandler
