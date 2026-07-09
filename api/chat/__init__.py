@@ -8,10 +8,7 @@ import urllib.parse
 
 import azure.functions as func
 
-FOUNDRY_AGENT_ENDPOINT = os.environ.get(
-    "FOUNDRY_AGENT_ENDPOINT",
-    "https://ai-account-yd7znjiks3cma.services.ai.azure.com/api/projects/ai-project-millennial-mum-agent/agents/millennial-mum/endpoint/protocols/openai/responses",
-)
+FOUNDRY_AGENT_ENDPOINT = os.environ.get("FOUNDRY_AGENT_ENDPOINT")
 API_VERSION = "2025-11-15-preview"
 
 _cached_token = None
