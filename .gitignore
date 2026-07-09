@@ -17,6 +17,18 @@ shopping_list.json
 .env.local
 .env.production
 
+# Azure Functions local settings (may contain secrets)
+api/local.settings.json
+
+# Foundry deployment artifacts (binary zips)
+.foundry/direct-code/agent-code.zip
+
+# Temp echo/test files
+echo_main.py
+echo_requirements.txt
+server_echo.py
+Dockerfile.echo
+
 # IDE
 .vscode/
 .idea/
@@ -25,3 +37,6 @@ shopping_list.json
 # OS
 .DS_Store
 Thumbs.db
+
+# SWA CLI
+swa-cli.config.json
