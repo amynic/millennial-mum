@@ -5,7 +5,7 @@ All information sourced ONLY from official NHS resources (nhs.uk, NHS 111).
 """
 
 from pydantic import BaseModel, Field
-from copilot import define_tool
+from tools._dual import define_tool
 
 
 # NHS-sourced guidance for common toddler emergencies

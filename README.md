@@ -148,3 +148,126 @@ hosting adapter and deployed to Microsoft Foundry as a hosted agent with:
 - Hosted models (GPT-4o, GPT-5)
 - Foundry Toolbox (web search, AI search, etc.)
 - Production eval & tracing
+
+---
+
+# Decomposed architecture (per-domain agents on Microsoft Agent Framework)
+
+The original monolith is one system prompt + one Copilot SDK session with **19 tools
+across 8 domains** flat-loaded. The decomposed system splits this into a **triage
+orchestrator** that routes to **four domain specialists** plus a **shared memory
+service**, each specialist on **its own Foundry catalog model**. This lives alongside
+the monolith (nothing above was deleted) under `agents/`, `server_af.py`, and
+`agent-af.yaml`.
+
+```mermaid
+graph TD
+    UI[Static Web App / iPhone PWA] --> API[/api/chat auth proxy/]
+    API --> ORCH[Triage Orchestrator<br/>router-as-tools · Katherine-Ryan voice]
+    ORCH --> K[Kitchen Specialist]
+    ORCH --> P[Planner Specialist]
+    ORCH --> A[Admin & Budget Specialist]
+    ORCH --> H[Health Specialist 🚨 calm, NHS-only]
+    ORCH -.reads/writes.-> MEM[(Shared Family Memory)]
+    K -.-> MEM
+    P -.-> MEM
+    A -.-> MEM
+    H -.-> MEM
+```
+
+### Agent → domain → starting model slate
+
+Models are **data-driven** (chosen by the Phase 1b bake-off), env-overridable, and
+span multiple providers — not vendor-locked. `gpt-4.x` is excluded (deprecated).
+
+| Agent | Domains | Default model | Provider | Env var |
+|-------|---------|---------------|----------|---------|
+| Triage Orchestrator | routing + compose | `gpt-5-mini` | foundry | `MM_TRIAGE_MODEL` |
+| Kitchen | meals + shopping | `gpt-5-nano` | foundry | `MM_KITCHEN_MODEL` |
+| Planner | schedule + activities | `gpt-5-mini` | foundry | `MM_PLANNER_MODEL` |
+| Admin & Budget | budget + admin | `claude-sonnet-5` | anthropic (Foundry) | `MM_ADMIN_BUDGET_MODEL` |
+| Health 🚨 | emergency | `claude-sonnet-5` | anthropic (Foundry) | `MM_HEALTH_MODEL` |
+| Shared Memory | memory | `gpt-5-nano` | foundry | `MM_MEMORY_MODEL` |
+
+### Layout (new)
+
+```
+agents/
+├── config.py          # model map + specialist/orchestrator prompts (Katherine Ryan voice)
+├── clients.py         # lazy Foundry / Anthropic-on-Foundry client factory
+├── tool_adapter.py    # Copilot tool impls → Agent Framework FunctionTools
+├── specialists.py     # builds the 4 domain specialists
+├── orchestrator.py    # router-as-tools triage + routing trace (run_traced)
+├── memory_service.py  # shared family memory (read + write)
+├── observability.py   # OpenTelemetry → Application Insights
+└── app.py             # local CLI entrypoint
+server_af.py           # Foundry hosted-agent server (responses protocol)
+agent-af.yaml          # decomposed hosted-agent manifest
+requirements-agents.txt
+evals/                 # 50-case dataset + harness (see below)
+```
+
+Run the decomposed system locally (needs a Foundry project + `az login`):
+
+```bash
+pip install -r requirements-agents.txt
+az login
+setx FOUNDRY_PROJECT_ENDPOINT "https://<project>.services.ai.azure.com/..."
+python -m agents.app "Plan dinner and sort the school run — my son is 3."
+# or serve it:
+python server_af.py
+```
+
+## Evaluations
+
+A **50-case dataset** (`evals/dataset.jsonl`: 20 easy / 20 medium / 10 hard, incl. 10
+safety-critical health cases) measures the monolith **baseline** vs the **decomposed**
+system. Custom evaluators are **pure Python** (routing accuracy, tool-call P/R/F1,
+NHS-source-only, no-diagnosis) and run anywhere with no cloud dependency:
+
+```bash
+# offline self-test — no credentials needed, validates harness + all 50 cases
+python -m evals.run_eval --self-test
+
+# baseline (monolith) with Azure AI judges (needs Foundry + a judge model)
+pip install -r evals/requirements.txt
+python -m evals.run_eval --target baseline --azure-judges
+
+# after decomposition
+python -m evals.run_eval --target decomposed --azure-judges
+```
+
+`--azure-judges` adds the Azure AI Evaluation SDK judges (Intent Resolution, Task
+Adherence, Groundedness, Relevance, Coherence, Fluency, optional Content Safety) and
+**fails loudly** if the SDK/endpoint isn't configured — it never silently downgrades.
+
+## Observability & per-agent cost
+
+Set `APPLICATIONINSIGHTS_CONNECTION_STRING` (from the App Insights resource linked to
+your Foundry project) and `agents/observability.py` exports OpenTelemetry traces for
+every orchestrator hop and specialist/tool call. Deploying each specialist as a named
+Foundry agent gives **per-agent cost** breakdowns in the portal (Operate → Overview,
+Assets → Agents *Estimated costs*, Build → Agents → Monitor). Tag resources with
+`app=millennial-mum` for Cost Management grouping. Prompt/response content is **off**
+traces by default (family/health data) — opt in with `MM_TRACE_SENSITIVE_DATA=true`.
+
+## Install on iPhone (PWA)
+
+The frontend is an installable Progressive Web App (`frontend/manifest.webmanifest`,
+`frontend/sw.js`, apple-touch icons, safe-area insets for the notch):
+
+1. Open the Static Web App URL in **Safari** on your iPhone.
+2. Tap **Share** → **Add to Home Screen** → **Add**.
+3. Launch from the home-screen icon — it opens fullscreen (standalone), no browser
+   chrome, and the app shell works offline (chat still needs a connection).
+
+## What needs a live Foundry project (handoff)
+
+These steps can't run in a credential-less sandbox — they need your Azure/Foundry env:
+
+- Provision the Foundry project + model deployments (the slate above, in a region with
+  GPT-5.x + Claude quota) and link an App Insights resource.
+- `python -m evals.run_eval --target baseline --azure-judges` → `evals/results/baseline.json`.
+- Run the per-domain **bake-off** → `evals/results/bakeoff.md`; lock winners.
+- `azd provision` + deploy `server_af.py` via `agent-af.yaml`.
+- Re-run evals on the decomposed system → `decomposed.json` + `comparison.md`.

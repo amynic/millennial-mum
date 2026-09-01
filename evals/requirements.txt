@@ -1,0 +1,10 @@
+# Evaluation harness dependencies.
+#
+# The custom evaluators in evals/evaluators.py are pure Python and need nothing
+# beyond the standard library. The Azure AI-judge evaluators (run with
+# --azure-judges) and running the real targets require these:
+
+azure-ai-evaluation
+azure-ai-projects>=2.3.0
+azure-identity
+python-dotenv

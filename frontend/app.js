@@ -130,3 +130,12 @@ function setProcessing(state) {
     sendBtn.disabled = state;
     userInput.disabled = state;
 }
+
+// Register the service worker so the app is installable + works offline (PWA).
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch((err) => {
+            console.warn('Service worker registration failed:', err);
+        });
+    });
+}
