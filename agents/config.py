@@ -17,23 +17,40 @@ from dataclasses import dataclass
 class ModelSpec:
     """A model assignment for one agent."""
 
-    provider: str  # "foundry" (OpenAI/Azure-sold) or "anthropic_foundry" (Claude on Foundry)
-    model: str  # Foundry deployment name (default; overridable via env)
+    provider: str  # "foundry" — all roles are served via the Foundry project's
+    #                OpenAI-compatible inference endpoint (GPT-5 family + DeepSeek).
+    model: str  # Foundry *deployment* name (role-named, not model-named)
     env_var: str  # env var that overrides the deployment name
 
     def deployment(self) -> str:
         return os.getenv(self.env_var, self.model)
 
 
-# Agent -> model. Defaults reflect the plan's starting slate; the bake-off
-# (evals/results/bakeoff.md) can revise these without code changes elsewhere.
+# Agent -> deployment. Deployments are named by ROLE (not model) so per-agent
+# cost shows up as its own line in Foundry and the app is decoupled from the
+# underlying model. The model behind each role (chosen by the bake-off, revisable
+# without code changes) is noted in the comment:
+#
+#   role          -> underlying model (provisioned on millennial-mum-foundry, eastus)
+#   ------------     ----------------------------------------------------------------
+#   triage        -> gpt-5-mini    (fast, cheap routing + compose)
+#   kitchen       -> gpt-5-nano    (cheapest; simple meal/shopping tasks)
+#   planner       -> gpt-5-mini    (schedule + activities)
+#   admin-budget  -> DeepSeek-V3.2 (capable + ~6x cheaper output than Claude)
+#   health        -> gpt-5 (full)  (strongest first-party for safety-critical)
+#   memory        -> gpt-5-nano    (cheap read/write of family facts)
+#
+# NOTE: Claude Sonnet 5 is the recommended premium option for admin-budget/health,
+# but it's a paid Azure *Marketplace* offer and cannot be deployed on this
+# internal/sandbox subscription. Swap by pointing MM_HEALTH_MODEL /
+# MM_ADMIN_BUDGET_MODEL at a `claude-sonnet-5` deployment on a paid subscription.
 AGENT_MODELS: dict[str, ModelSpec] = {
-    "triage": ModelSpec("foundry", "gpt-5-mini", "MM_TRIAGE_MODEL"),
-    "kitchen": ModelSpec("foundry", "gpt-5-nano", "MM_KITCHEN_MODEL"),
-    "planner": ModelSpec("foundry", "gpt-5-mini", "MM_PLANNER_MODEL"),
-    "admin_budget": ModelSpec("anthropic_foundry", "claude-sonnet-5", "MM_ADMIN_BUDGET_MODEL"),
-    "health": ModelSpec("anthropic_foundry", "claude-sonnet-5", "MM_HEALTH_MODEL"),
-    "memory": ModelSpec("foundry", "gpt-5-nano", "MM_MEMORY_MODEL"),
+    "triage": ModelSpec("foundry", "triage", "MM_TRIAGE_MODEL"),
+    "kitchen": ModelSpec("foundry", "kitchen", "MM_KITCHEN_MODEL"),
+    "planner": ModelSpec("foundry", "planner", "MM_PLANNER_MODEL"),
+    "admin_budget": ModelSpec("foundry", "admin-budget", "MM_ADMIN_BUDGET_MODEL"),
+    "health": ModelSpec("foundry", "health", "MM_HEALTH_MODEL"),
+    "memory": ModelSpec("foundry", "memory", "MM_MEMORY_MODEL"),
 }
 
 # Human-facing agent names (also used for per-agent cost attribution in Foundry).

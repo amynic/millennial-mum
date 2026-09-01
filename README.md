@@ -175,19 +175,31 @@ graph TD
     H -.-> MEM
 ```
 
-### Agent → domain → starting model slate
+### Agent → domain → provisioned model slate
 
-Models are **data-driven** (chosen by the Phase 1b bake-off), env-overridable, and
-span multiple providers — not vendor-locked. `gpt-4.x` is excluded (deprecated).
+Deployments are **role-named** (not model-named) so per-agent cost is its own line
+in Foundry and the app is decoupled from the underlying model. Models are
+env-overridable and span providers (GPT-5 family + DeepSeek). `gpt-4.x` is excluded
+(deprecated).
 
-| Agent | Domains | Default model | Provider | Env var |
-|-------|---------|---------------|----------|---------|
-| Triage Orchestrator | routing + compose | `gpt-5-mini` | foundry | `MM_TRIAGE_MODEL` |
-| Kitchen | meals + shopping | `gpt-5-nano` | foundry | `MM_KITCHEN_MODEL` |
-| Planner | schedule + activities | `gpt-5-mini` | foundry | `MM_PLANNER_MODEL` |
-| Admin & Budget | budget + admin | `claude-sonnet-5` | anthropic (Foundry) | `MM_ADMIN_BUDGET_MODEL` |
-| Health 🚨 | emergency | `claude-sonnet-5` | anthropic (Foundry) | `MM_HEALTH_MODEL` |
-| Shared Memory | memory | `gpt-5-nano` | foundry | `MM_MEMORY_MODEL` |
+| Agent | Domains | Deployment (role) | Underlying model | Env var |
+|-------|---------|-------------------|------------------|---------|
+| Triage Orchestrator | routing + compose | `triage` | `gpt-5-mini` | `MM_TRIAGE_MODEL` |
+| Kitchen | meals + shopping | `kitchen` | `gpt-5-nano` | `MM_KITCHEN_MODEL` |
+| Planner | schedule + activities | `planner` | `gpt-5-mini` | `MM_PLANNER_MODEL` |
+| Admin & Budget | budget + admin | `admin-budget` | `DeepSeek-V3.2` | `MM_ADMIN_BUDGET_MODEL` |
+| Health 🚨 | emergency | `health` | `gpt-5` (full) | `MM_HEALTH_MODEL` |
+| Shared Memory | memory | `memory` | `gpt-5-nano` | `MM_MEMORY_MODEL` |
+
+**On Claude Sonnet 5:** it's the recommended premium pick for Admin & Budget /
+Health, but it's a paid Azure **Marketplace** offer and can't be deployed on an
+internal/sandbox subscription (as used here). On a paid subscription, create a
+`claude-sonnet-5` deployment and point `MM_HEALTH_MODEL` / `MM_ADMIN_BUDGET_MODEL`
+at it — no code change. DeepSeek-V3.2 (Admin & Budget) is ~6× cheaper on output
+than Claude and, on Foundry, is **Microsoft-hosted in-region** (data stays in Azure).
+
+Per-1M-token cost of the slate: `gpt-5-nano` $0.05/$0.40 · `gpt-5-mini` $0.25/$2 ·
+`DeepSeek-V3.2` $0.58/$1.68 · `gpt-5` $1.25/$10 · (`claude-sonnet-5` $2/$10).
 
 ### Layout (new)
 
@@ -261,13 +273,31 @@ The frontend is an installable Progressive Web App (`frontend/manifest.webmanife
 3. Launch from the home-screen icon — it opens fullscreen (standalone), no browser
    chrome, and the app shell works offline (chat still needs a connection).
 
-## What needs a live Foundry project (handoff)
+## Provisioned Foundry environment
 
-These steps can't run in a credential-less sandbox — they need your Azure/Foundry env:
+Live resources (subscription **ai-team**, tenant *Foundry DevRel 2610*, region **eastus**):
 
-- Provision the Foundry project + model deployments (the slate above, in a region with
-  GPT-5.x + Claude quota) and link an App Insights resource.
-- `python -m evals.run_eval --target baseline --azure-judges` → `evals/results/baseline.json`.
-- Run the per-domain **bake-off** → `evals/results/bakeoff.md`; lock winners.
-- `azd provision` + deploy `server_af.py` via `agent-af.yaml`.
-- Re-run evals on the decomposed system → `decomposed.json` + `comparison.md`.
+| Resource | Name |
+|----------|------|
+| Resource group | `rg-millennial-mum` |
+| Foundry account | `millennial-mum-foundry` (AIServices) |
+| Foundry project | `millennial-mum` |
+| Project endpoint | `https://millennial-mum-foundry.services.ai.azure.com/api/projects/millennial-mum` |
+| Deployments (role-named) | `triage`, `planner`, `kitchen`, `memory`, `admin-budget`, `health` |
+| App Insights | `millennial-mum-insights` (workspace-based, `millennial-mum-logs`) |
+
+`az login` + `cp .env.example .env` (already populated locally) → `python -m agents.app "..."`
+or `python server_af.py`. Data-plane roles (Cognitive Services User / Azure AI User)
+are assigned to the signing-in user. All six deployments + the full orchestrator
+route/compose flow are **verified live**.
+
+## Still to do (needs the live env / your call)
+
+- **Baseline eval** of the monolith: `python -m evals.run_eval --target baseline --azure-judges`
+  (needs `GITHUB_TOKEN` for the Copilot-SDK monolith) → `evals/results/baseline.json`.
+- **Bake-off**: eval candidate models per role (e.g. `admin-budget` DeepSeek-V3.2 vs
+  gpt-5-mini; `health` gpt-5 vs gpt-5-mini) → `evals/results/bakeoff.md`; lock winners.
+- **Deploy** the decomposed host: `azd provision` + deploy `server_af.py` via `agent-af.yaml`.
+- **Post-decomposition eval** on the decomposed target → `decomposed.json` + `comparison.md`.
+- **Claude (optional):** on a paid subscription, deploy `claude-sonnet-5` and repoint
+  `MM_HEALTH_MODEL` / `MM_ADMIN_BUDGET_MODEL`.

@@ -19,16 +19,16 @@ template:
     - name: APPLICATIONINSIGHTS_CONNECTION_STRING
       description: Connection string of the App Insights resource linked to the Foundry project (enables end-to-end tracing)
     - name: MM_TRIAGE_MODEL
-      description: Foundry deployment name for the triage orchestrator (default gpt-5-mini)
+      description: Foundry deployment name for the triage orchestrator (default "triage" → gpt-5-mini)
     - name: MM_KITCHEN_MODEL
-      description: Foundry deployment name for the Kitchen specialist (default gpt-5-nano)
+      description: Foundry deployment name for the Kitchen specialist (default "kitchen" → gpt-5-nano)
     - name: MM_PLANNER_MODEL
-      description: Foundry deployment name for the Planner specialist (default gpt-5-mini)
+      description: Foundry deployment name for the Planner specialist (default "planner" → gpt-5-mini)
     - name: MM_ADMIN_BUDGET_MODEL
-      description: Foundry deployment name for the Admin & Budget specialist (default claude-sonnet-5)
+      description: Foundry deployment name for the Admin & Budget specialist (default "admin-budget" → DeepSeek-V3.2; use a claude-sonnet-5 deployment on a paid sub for the premium option)
     - name: MM_HEALTH_MODEL
-      description: Foundry deployment name for the Health specialist (default claude-sonnet-5)
+      description: Foundry deployment name for the Health specialist (default "health" → gpt-5; use a claude-sonnet-5 deployment on a paid sub for the premium option)
     - name: MM_MEMORY_MODEL
-      description: Foundry deployment name for the shared memory service (default gpt-5-nano)
+      description: Foundry deployment name for the shared memory service (default "memory" → gpt-5-nano)
     - name: MM_TRACE_SENSITIVE_DATA
       description: "Set to true to record prompt/response content on traces (default false)"
