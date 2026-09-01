@@ -226,8 +226,10 @@ def run_azure_judges(records: list[dict], cases_by_id: dict[str, dict]) -> dict:
     return summary
 
 
-def run(target_name: str, out_path: Path | None, azure_judges: bool) -> dict:
+def run(target_name: str, out_path: Path | None, azure_judges: bool, limit: int | None = None) -> dict:
     cases = load_dataset()
+    if limit:
+        cases = cases[:limit]
     target_cls = TARGETS[target_name]
     target = target_cls()
 
@@ -303,12 +305,14 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--azure-judges", action="store_true")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--limit", type=int, default=None,
+                        help="Only run the first N cases (cheap live validation).")
     args = parser.parse_args()
 
     if args.self_test:
         return self_test()
 
-    run(args.target, args.out, args.azure_judges)
+    run(args.target, args.out, args.azure_judges, args.limit)
     return 0
 
 

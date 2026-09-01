@@ -95,16 +95,25 @@ class Orchestrator:
 
 
 def _extract_tool_names(response) -> list[str]:
-    """Pull tool/function names out of an AgentResponse, best-effort."""
+    """Pull tool/function names out of an AgentResponse, best-effort.
+
+    Agent Framework returns ``AgentResponse.messages -> Message.contents ->
+    Content`` where a tool invocation is a ``Content`` whose ``type`` is
+    ``"function_call"`` (or ``"function_result"``) and whose ``name`` is the
+    tool name. We descend through messages into their content items rather than
+    reading ``.name`` off the messages themselves (messages have no ``name``).
+    """
     names: list[str] = []
-    for attr in ("messages", "contents", "content"):
-        items = getattr(response, attr, None)
-        if not items:
-            continue
-        seq = items if isinstance(items, (list, tuple)) else [items]
-        for item in seq:
-            name = getattr(item, "name", None)
-            if name:
+    messages = getattr(response, "messages", None)
+    if not messages:
+        return names
+    seq = messages if isinstance(messages, (list, tuple)) else [messages]
+    for message in seq:
+        contents = getattr(message, "contents", None) or []
+        for content in contents:
+            ctype = getattr(content, "type", None)
+            name = getattr(content, "name", None)
+            if name and ctype in ("function_call", "function_result"):
                 names.append(name)
     return names
 
