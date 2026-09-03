@@ -33,6 +33,7 @@ import json
 import os
 import statistics
 import sys
+import time
 from collections import defaultdict
 from pathlib import Path
 
@@ -226,19 +227,19 @@ def run_azure_judges(records: list[dict], cases_by_id: dict[str, dict]) -> dict:
     return summary
 
 
-def run(target_name: str, out_path: Path | None, azure_judges: bool, limit: int | None = None) -> dict:
-    cases = load_dataset()
-    if limit:
-        cases = cases[:limit]
-    target_cls = TARGETS[target_name]
-    target = target_cls()
+def _run_case(target, case: dict, retries: int, out_path: Path | None) -> dict:
+    """Run one case with retries; never raises. Returns a record (with error marker on failure).
 
-    records = []
-    for case in cases:
-        run_record = target(case)
-        scores = evaluate_case(case, run_record)
-        records.append(
-            {
+    A single transient network/service blip must not discard a whole run, so we
+    retry a few times with backoff and, if the case still fails, record an error
+    marker (empty response/agents/tools -> scores of 0 for that case) and move on.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(retries + 1):
+        try:
+            run_record = target(case)
+            scores = evaluate_case(case, run_record)
+            return {
                 "id": case["id"],
                 "difficulty": case["difficulty"],
                 "query": case["query"],
@@ -248,7 +249,50 @@ def run(target_name: str, out_path: Path | None, azure_judges: bool, limit: int 
                 "latency_ms": run_record.get("latency_ms", 0.0),
                 "scores": scores,
             }
-        )
+        except Exception as exc:  # transient network/service errors, etc.
+            last_exc = exc
+            if attempt < retries:
+                sleep_s = 2 ** attempt
+                print(f"  [{case['id']}] attempt {attempt + 1} failed ({exc}); "
+                      f"retrying in {sleep_s}s...", file=sys.stderr)
+                time.sleep(sleep_s)
+
+    print(f"  [{case['id']}] FAILED after {retries + 1} attempts: {last_exc}", file=sys.stderr)
+    error_record = {"response": "", "agents_used": [], "tool_calls": [], "latency_ms": 0.0}
+    return {
+        "id": case["id"],
+        "difficulty": case["difficulty"],
+        "query": case["query"],
+        "response": "",
+        "agents_used": [],
+        "tool_calls": [],
+        "latency_ms": 0.0,
+        "error": str(last_exc),
+        "scores": evaluate_case(case, error_record),
+    }
+
+
+def run(target_name: str, out_path: Path | None, azure_judges: bool, limit: int | None = None,
+        retries: int = 2) -> dict:
+    cases = load_dataset()
+    if limit:
+        cases = cases[:limit]
+    target_cls = TARGETS[target_name]
+    target = target_cls()
+
+    records = []
+    for i, case in enumerate(cases, 1):
+        print(f"[{i}/{len(cases)}] {case['id']} ({case['difficulty']})", file=sys.stderr)
+        record = _run_case(target, case, retries, out_path)
+        records.append(record)
+        # Persist incrementally so a crash never loses completed cases.
+        if out_path:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(
+                json.dumps({"target": target_name, "n_cases": len(records),
+                            "summary": aggregate(records), "records": records}, indent=2),
+                encoding="utf-8",
+            )
 
     summary = aggregate(records)
     if azure_judges:
@@ -307,12 +351,14 @@ def main() -> int:
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--limit", type=int, default=None,
                         help="Only run the first N cases (cheap live validation).")
+    parser.add_argument("--retries", type=int, default=2,
+                        help="Per-case retry attempts on transient failures (default 2).")
     args = parser.parse_args()
 
     if args.self_test:
         return self_test()
 
-    run(args.target, args.out, args.azure_judges, args.limit)
+    run(args.target, args.out, args.azure_judges, args.limit, args.retries)
     return 0
 
 
