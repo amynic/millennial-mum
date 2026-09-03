@@ -40,3 +40,7 @@ Thumbs.db
 
 # SWA CLI
 swa-cli.config.json
+
+# transient eval run logs / scratch
+evals/results/_*.log
+evals/results/_*.json
