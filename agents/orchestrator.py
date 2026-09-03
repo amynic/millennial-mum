@@ -84,9 +84,27 @@ class Orchestrator:
         self._trace = RunTrace()
         return await self.agent.run(query)
 
+    def _capture_orchestrator_tools(self, response) -> None:
+        """Record the orchestrator's own tool calls (memory) into the trace.
+
+        Memory tools are attached directly to the orchestrator (not a routed
+        specialist), so their invocations only appear on the orchestrator's own
+        response — never via a router wrapper. We scan the final response for
+        function-call contents: ``ask_<domain>`` calls are specialist routing
+        (already tracked by the router wrapper, so skipped here); every other
+        tool name is an orchestrator-level memory tool, which we record and
+        attribute to the ``memory`` domain.
+        """
+        for name in _extract_tool_names(response):
+            if name.startswith("ask_"):
+                continue
+            self._trace.tool_calls.append(name)
+            self._trace.agents_used.append("memory")
+
     async def run_traced(self, query: str) -> dict:
         """Run one turn and return text + routing/tool trace (for evals)."""
         response = await self.run(query)
+        self._capture_orchestrator_tools(response)
         return {
             "response": _agent_text(response),
             "agents_used": list(dict.fromkeys(self._trace.agents_used)),
