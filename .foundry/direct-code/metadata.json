@@ -1,21 +1,28 @@
 {
-  "description": "Millennial Mum parenting copilot powered by GitHub Copilot SDK",
+  "description": "Millennial Mum (decomposed) — Agent Framework triage orchestrator + domain specialists on Microsoft Foundry",
   "definition": {
     "kind": "hosted",
     "protocol_versions": [
       {
         "protocol": "responses",
-        "version": "1.0.0"
+        "version": "2025-03-01"
       }
     ],
     "cpu": "1",
     "memory": "2Gi",
     "environment_variables": {
-      "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      "FOUNDRY_PROJECT_ENDPOINT": "${FOUNDRY_PROJECT_ENDPOINT}",
+      "APPLICATIONINSIGHTS_CONNECTION_STRING": "${APPLICATIONINSIGHTS_CONNECTION_STRING}",
+      "MM_TRIAGE_MODEL": "triage",
+      "MM_PLANNER_MODEL": "planner",
+      "MM_KITCHEN_MODEL": "kitchen",
+      "MM_MEMORY_MODEL": "memory",
+      "MM_HEALTH_MODEL": "health",
+      "MM_ADMIN_BUDGET_MODEL": "admin-budget"
     },
     "code_configuration": {
       "runtime": "python_3_13",
-      "entry_point": ["python", "main.py"],
+      "entry_point": ["python", "server_af.py"],
       "dependency_resolution": "remote_build"
     }
   }

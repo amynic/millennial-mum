@@ -1,0 +1,77 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+#
+# azd project for the DECOMPOSED Millennial Mum (Agent Framework) hosted on
+# Microsoft Foundry as a **Hosted Agent** (Responses protocol).
+#
+# WHY THIS SHAPE
+# --------------
+# We deliberately do NOT declare an `azure.ai.project` service with model
+# `deployments:` here. The Foundry project `millennial-mum` already exists with
+# six role-named deployments (triage / planner / kitchen / memory / health /
+# admin-budget) that the code and evals depend on. Re-declaring them would risk
+# azd re-provisioning / drifting them. Instead we bind azd to the EXISTING
+# project and let the agent read it via env vars.
+#
+# ONE-TIME SETUP (reuse the existing project — no new spend on models):
+#   azd init            # if no azd env yet
+#   azd env set AZURE_AI_PROJECT "/subscriptions/7a880728-70d3-49d0-adde-4250716cfd94/resourceGroups/rg-millennial-mum/providers/Microsoft.CognitiveServices/accounts/millennial-mum-foundry/projects/millennial-mum"
+#   azd env set FOUNDRY_PROJECT_ENDPOINT "https://millennial-mum-foundry.services.ai.azure.com/api/projects/millennial-mum"
+#   azd env set APPLICATIONINSIGHTS_CONNECTION_STRING "<conn-string of millennial-mum-insights>"
+#
+# DEPLOY:
+#   azd up            # builds server_af.py as a code ZIP (remote build) and
+#                     # creates/updates the hosted agent version in Foundry.
+#
+# REQUIRES: azd >= 1.27.1 and the Foundry agents extension:
+#   azd extension install azure.ai.agents   (or: azd extension upgrade azure.ai.agents)
+#
+# After deploy, azd prints AGENT_MILLENNIAL_MUM_RESPONSES_ENDPOINT — that is the
+# value to set as FOUNDRY_AGENT_ENDPOINT on the Static Web App (phone frontend).
+
+requiredVersions:
+  azd: ">=1.27.1"
+  extensions:
+    azure.ai.agents: ">=1.0.0-beta.9"
+
+name: millennial-mum
+
+services:
+  millennial-mum:
+    host: azure.ai.agent
+    kind: hosted
+    name: millennial-mum
+    description: >
+      Decomposed Millennial Mum: a triage orchestrator (router-as-tools)
+      coordinating four domain specialists (Kitchen, Planner, Admin & Budget,
+      Health) plus shared family memory, built on Microsoft Agent Framework.
+      Each specialist runs on its own Foundry catalog model.
+    language: python
+    project: .
+    metadata:
+      tags:
+        - Agent Framework
+        - AI Agent Hosting
+        - Azure AI AgentServer
+        - Responses Protocol
+        - Parenting Copilot
+    protocols:
+      - protocol: responses
+        version: "2025-03-01"
+    codeConfiguration:
+      runtime: python_3_13
+      entryPoint: server_af.py
+      dependencyResolution: remote_build
+    container:
+      resources:
+        cpu: "1.0"
+        memory: 2.0Gi
+    env:
+      # Bind to the EXISTING Foundry project + role-named deployments.
+      FOUNDRY_PROJECT_ENDPOINT: ${FOUNDRY_PROJECT_ENDPOINT}
+      APPLICATIONINSIGHTS_CONNECTION_STRING: ${APPLICATIONINSIGHTS_CONNECTION_STRING}
+      MM_TRIAGE_MODEL: triage
+      MM_PLANNER_MODEL: planner
+      MM_KITCHEN_MODEL: kitchen
+      MM_MEMORY_MODEL: memory
+      MM_HEALTH_MODEL: health
+      MM_ADMIN_BUDGET_MODEL: admin-budget

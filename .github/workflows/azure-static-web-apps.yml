@@ -1,0 +1,62 @@
+name: Azure Static Web Apps CI/CD
+
+# Deploys the Millennial Mum PWA (installable web app for iPhone "Add to Home
+# Screen") to Azure Static Web Apps:
+#   * frontend/  -> the static PWA (HTML/CSS/JS + service worker + manifest)
+#   * api/       -> the managed Azure Functions proxy that forwards chat to the
+#                   Foundry hosted agent (holds the auth; no secrets on device)
+#
+# SETUP (one-time):
+#   1. Create the Static Web App (Free tier = $0), e.g.:
+#        az staticwebapp create -n millennial-mum-web -g rg-millennial-mum \
+#          -l eastus2 --sku Free
+#   2. Get its deployment token:
+#        az staticwebapp secrets list -n millennial-mum-web \
+#          --query properties.apiKey -o tsv
+#   3. Add it as the repo secret AZURE_STATIC_WEB_APPS_API_TOKEN:
+#        gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN -b "<token>"
+#   4. Set the app settings the Functions proxy needs (FOUNDRY_AGENT_ENDPOINT
+#      comes from `azd up` output AGENT_MILLENNIAL_MUM_RESPONSES_ENDPOINT):
+#        az staticwebapp appsettings set -n millennial-mum-web --setting-names \
+#          FOUNDRY_AGENT_ENDPOINT="<responses-endpoint>" \
+#          AZURE_TENANT_ID="<tenant>" AZURE_CLIENT_ID="<sp-app-id>" \
+#          AZURE_CLIENT_SECRET="<sp-secret>"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [main]
+
+jobs:
+  build_and_deploy_job:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    runs-on: ubuntu-latest
+    name: Build and Deploy
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Build And Deploy
+        id: builddeploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: "frontend"
+          api_location: "api"
+          output_location: ""
+
+  close_pull_request_job:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    name: Close Pull Request
+    steps:
+      - name: Close Pull Request
+        id: closepullrequest
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: "close"
