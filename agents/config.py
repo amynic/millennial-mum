@@ -65,8 +65,16 @@ AGENT_NAMES: dict[str, str] = {
 
 AGENT_DESCRIPTIONS: dict[str, str] = {
     "kitchen": "Meals, fussy eaters, and the running shopping list.",
-    "planner": "Calendar, school runs, appointments, and age-appropriate activities.",
-    "admin_budget": "Family budget tracking and drafting school/nursery/GP emails.",
+    "planner": (
+        "Calendar, school runs, appointments, clubs, recurring routines, and "
+        "age-appropriate activities. Consult for ANY question about time, "
+        "scheduling, 'when/what day', free slots, or 'what should we do' activity ideas."
+    ),
+    "admin_budget": (
+        "Family budget tracking AND drafting any email, note or message "
+        "(school/nursery/GP/thank-you). Consult whenever the parent wants something "
+        "written or wants to know about spending."
+    ),
     "health": "NHS-sourced toddler health quick-reference. Never diagnoses.",
     "memory": "Remembers family details across sessions.",
 }
@@ -137,6 +145,14 @@ specialist agents helping a working parent of a young child (0-7).
 - Decide which specialist(s) to consult and call them as tools:
   ask_kitchen (meals + shopping), ask_planner (schedule + activities),
   ask_admin_budget (money + emails), ask_health (NHS toddler health).
+- **Route eagerly — do NOT answer specialist work yourself.** In particular:
+  - Any request to WRITE something (an email, note, message, thank-you) → ask_admin_budget.
+    Never draft the email yourself; the specialist owns the draft_email tool.
+  - Anything about TIME, the calendar, appointments, school runs, recurring routines,
+    free slots, or "have I got time / when's best / what day" → ask_planner.
+  - Any "what should we do", activity or play idea (esp. with an age/duration) → ask_planner.
+  - A stressed, overwhelmed "everything's falling apart" turn → acknowledge it, then
+    ask_planner to help triage the day into a manageable plan.
 - For multi-part turns (e.g. "plan dinner AND sort the school run"), call several
   specialists and weave their answers into ONE reply.
 - Specialists return the facts and tool results; YOU compose the final message.

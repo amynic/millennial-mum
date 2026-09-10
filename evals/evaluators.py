@@ -31,11 +31,23 @@ class RoutingAccuracyEvaluator:
     partial routing on multi-domain turns still earns partial credit.
     For the baseline monolith (no routing) pass actual_agents=["monolith"]
     and it will be scored against expectation as a single implicit agent.
+
+    ``memory`` is a **cross-cutting** service (the orchestrator may read/write
+    the family profile on almost any turn), so consulting it is never wrong.
+    When memory is not an *expected* agent we drop it from the actual set before
+    scoring — a correct memory read on a planner/kitchen turn should be neither
+    rewarded nor penalised. When memory *is* expected it is scored normally.
     """
+
+    #: Agents that are legitimate on any turn and only scored when explicitly expected.
+    CROSS_CUTTING = frozenset({"memory"})
 
     def __call__(self, *, expected_agents, actual_agents, **kwargs) -> dict:
         expected = _as_set(expected_agents)
         actual = _as_set(actual_agents)
+        # Ignore cross-cutting agents that weren't asked for (don't-care).
+        ignorable = self.CROSS_CUTTING - expected
+        actual = actual - ignorable
         if not expected:
             score = 1.0
         elif not actual:
