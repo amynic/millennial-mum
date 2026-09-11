@@ -1,7 +1,7 @@
 # Millennial Mum 🍼💼 — V2
 
 The AI copilot for working parents juggling careers and small children — now a
-**decomposed, multi-agent system hosted on [Azure AI Foundry](https://learn.microsoft.com/azure/ai-foundry/)**,
+**decomposed, multi-agent system hosted on [Microsoft Foundry](https://learn.microsoft.com/azure/ai-foundry/)**,
 fronted by an installable phone **PWA** with **streaming replies** and
 **multi-turn memory**.
 
