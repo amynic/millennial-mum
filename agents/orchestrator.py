@@ -119,6 +119,31 @@ class Orchestrator:
             "tool_calls": list(dict.fromkeys(self._trace.tool_calls)),
         }
 
+    async def stream_traced(self, messages):
+        """Yield the composed reply as text deltas for one turn.
+
+        Uses Agent Framework's streaming run so the hosted server can forward
+        tokens to the client as they're generated. Router tool calls fire during
+        iteration (updating the trace); the visible final reply streams as text
+        deltas. After the stream is exhausted, routing is available on
+        ``self.last_agents_used()`` for logging.
+        """
+        self._trace = RunTrace()
+        stream = self.agent.run(messages, stream=True)
+        async for update in stream:
+            text = getattr(update, "text", None)
+            if text:
+                yield text
+        try:
+            final = await stream.get_final_response()
+            self._capture_orchestrator_tools(final)
+        except Exception:  # pragma: no cover - trace is best-effort
+            pass
+
+    def last_agents_used(self) -> list[str]:
+        """Distinct specialists routed to on the most recent run."""
+        return list(dict.fromkeys(self._trace.agents_used))
+
 
 def _extract_tool_names(response) -> list[str]:
     """Pull tool/function names out of an AgentResponse, best-effort.

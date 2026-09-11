@@ -8,7 +8,7 @@ const newChatBtn = document.getElementById('newChatBtn');
 // server-side (client-credentials) and forwards to the hosted agent. It lives
 // off the SWA (own origin) so long multi-agent replies aren't capped by the
 // 45s Static Web Apps managed-functions gateway limit.
-const API_ENDPOINT = 'https://millennial-mum-api.azurewebsites.net/api/chat';
+const API_ENDPOINT = 'https://millennial-mum-api-flex.azurewebsites.net/api/chat';
 
 // Running transcript so the agent has multi-turn context. The client owns the
 // history and sends it on every turn; persisted so closing/reopening the
@@ -68,15 +68,38 @@ chatForm.addEventListener('submit', async (e) => {
             body: JSON.stringify({ messages: history.slice(-MAX_TURNS) }),
         });
 
-        if (!response.ok) {
+        if (!response.ok || !response.body) {
             throw new Error(`Server error: ${response.status}`);
         }
 
-        const data = await response.json();
-        removeTypingIndicator(typingEl);
+        // Stream the reply: append text to a single assistant bubble as chunks
+        // arrive so the answer renders progressively instead of after the full
+        // 28-80s wait.
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let reply = '';
+        let messageEl = null;
 
-        const reply = data.reply || 'No response received.';
-        appendMessage('assistant', reply);
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            if (!chunk) continue;
+            if (!messageEl) {
+                removeTypingIndicator(typingEl);
+                messageEl = appendMessage('assistant', '');
+            }
+            reply += chunk;
+            updateMessage(messageEl, reply);
+        }
+
+        removeTypingIndicator(typingEl);
+        reply = reply.trim();
+        if (!reply) {
+            if (!messageEl) messageEl = appendMessage('assistant', '');
+            reply = 'No response received.';
+            updateMessage(messageEl, reply);
+        }
         history.push({ role: 'assistant', content: reply });
         saveHistory();
     } catch (error) {
@@ -129,6 +152,14 @@ function appendMessage(role, content) {
 
     messageDiv.appendChild(contentDiv);
     chatContainer.appendChild(messageDiv);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+    return messageDiv;
+}
+
+// Re-render an existing bubble's content (used while streaming a reply in).
+function updateMessage(messageDiv, content) {
+    const contentDiv = messageDiv.querySelector('.message-content');
+    if (contentDiv) contentDiv.innerHTML = formatContent(content);
     chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 

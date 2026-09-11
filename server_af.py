@@ -147,7 +147,13 @@ async def _build_conversation(request, context) -> list[Message]:
 
 @app.response_handler
 async def handle_response(request, context, cancellation_signal):
-    """Process an incoming message through the decomposed orchestrator."""
+    """Process an incoming message through the decomposed orchestrator.
+
+    Streams the composed reply token-by-token: when the client sends
+    ``stream: true`` the SDK relays each text delta as an SSE
+    ``response.output_text.delta`` event, so the PWA renders the answer as it's
+    generated instead of waiting for the full 28-80s reply.
+    """
     messages = await _build_conversation(request, context)
     last_user = next(
         (m.text for m in reversed(messages) if m.role == "user" and getattr(m, "text", None)),
@@ -155,17 +161,19 @@ async def handle_response(request, context, cancellation_signal):
     )
     logger.info("Turn: %d msgs, latest user: %s", len(messages), last_user[:80])
 
-    async def get_reply():
+    orchestrator = get_orchestrator()
+
+    async def token_stream():
         try:
-            result = await get_orchestrator().run_traced(messages)
-            routed = ", ".join(result.get("agents_used", [])) or "(none)"
+            async for chunk in orchestrator.stream_traced(messages):
+                yield chunk
+            routed = ", ".join(orchestrator.last_agents_used()) or "(none)"
             logger.info("Routed to: %s", routed)
-            return result["response"]
         except Exception as e:  # pragma: no cover - depends on live Foundry
             logger.error("Agent error: %s", e, exc_info=True)
-            return "⚠️ Something went wrong on my end. Please try again in a moment."
+            yield "⚠️ Something went wrong on my end. Please try again in a moment."
 
-    return TextResponse(context, request, text=get_reply)
+    return TextResponse(context, request, text=token_stream())
 
 
 def main():
