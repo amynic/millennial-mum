@@ -1,58 +1,74 @@
-# Go-live runbook — Millennial Mum
+# Go-live runbook — Millennial Mum (LIVE)
 
-Two live deploys are fully scaffolded and gated only on you (real Azure
-resources + auth). Run them in order; step 3 needs the endpoint from step 2.
+Both the hosted multi-agent and the phone PWA are deployed and verified live.
+This documents what's running and how to redeploy.
 
-Foundry project (existing — reused, no new model spend):
-- Endpoint: `https://millennial-mum-foundry.services.ai.azure.com/api/projects/millennial-mum`
-- RG `rg-millennial-mum` · sub `7a880728-70d3-49d0-adde-4250716cfd94` (ai-team)
-- 6 role-named deployments: triage→gpt-5-mini, planner→gpt-5-mini,
-  kitchen→gpt-5-nano, memory→gpt-5-nano, health→gpt-5, admin-budget→DeepSeek-V3.2
+## Live resources (rg-millennial-mum, sub 7a880728-…, tenant 46946eec-…)
 
----
+| Piece | Resource | URL |
+|---|---|---|
+| Foundry project | `millennial-mum-foundry` / project `millennial-mum` | https://millennial-mum-foundry.services.ai.azure.com/api/projects/millennial-mum |
+| Hosted agent | `millennial-mum` (Foundry Hosted Agent, code deploy) | `…/agents/millennial-mum/endpoint/protocols/openai/responses?api-version=v1` |
+| Phone PWA | `millennial-mum-web` (Static Web App, **Free**) | https://thankful-desert-05e2c3e0f.6.azurestaticapps.net |
+| API proxy | `millennial-mum-api` (Functions, Consumption, Py 3.11) | https://millennial-mum-api.azurewebsites.net/api/chat |
+| Proxy auth | SP `millennial-mum-web-proxy` (appId 7fd3c7c4-…), role **Azure AI User** on the Foundry account | client-credentials |
 
-## 1. Evals in Foundry — DONE ✅
-Portal-tracked evaluations are already registered (Foundry → project → Evaluations):
-`mm-decomposed-v2-pretuning` (routing 0.86) and `mm-decomposed-baseline-tuned`
-(routing 0.96, safety 1.0). Re-run any time:
+**On iPhone:** open the PWA URL in Safari → Share → **Add to Home Screen**.
+
+## Architecture (why the proxy is its own Function App)
+
+Phone PWA → (CORS) → `millennial-mum-api` Function App → client-credentials SP
+token → Foundry hosted agent → decomposed orchestrator (triage → specialist →
+compose) → reply. Auth stays server-side; no secrets on the device.
+
+Warm multi-agent replies run ~28–80s. **SWA managed functions cap responses at
+45s**, so the proxy runs on its own Consumption Function App (HTTP up to 230s)
+and the SWA stays on the Free tier. The browser calls the Function App directly
+(CORS allow-list = the SWA origin), rather than via an SWA linked backend (which
+would need the $9/mo Standard tier).
+
+## Redeploy — hosted agent
+
 ```
-$env:FOUNDRY_PROJECT_ENDPOINT = "https://millennial-mum-foundry.services.ai.azure.com/api/projects/millennial-mum"
-python -m evals.foundry_eval --run evals/results/decomposed.json --name <name>
+azd deploy millennial-mum          # rebuilds server_af.py, new agent version
+azd ai agent invoke millennial-mum '{"input":"..."}'   # smoke test
 ```
+Notes: `requirements.txt` MUST list the decomposed deps (agent-framework,
+azure-ai-agentserver-responses, azure-identity, …) — that's what the remote
+build installs. Responses protocol version is `2.0.0`. Env (FOUNDRY_PROJECT_
+ENDPOINT, APPLICATIONINSIGHTS_CONNECTION_STRING) is set via `azd env set`.
 
----
+## Redeploy — API proxy (Function App)
 
-## 2. Host the multi-agent in Foundry (azd Hosted Agent)
-**Cost:** runs a container continuously (~1 vCPU / 2 GiB) — ongoing compute.
 ```
-azd auth login
-azd env new millennial-mum
-azd env set AZURE_AI_PROJECT "/subscriptions/7a880728-70d3-49d0-adde-4250716cfd94/resourceGroups/rg-millennial-mum/providers/Microsoft.CognitiveServices/accounts/millennial-mum-foundry/projects/millennial-mum"
-azd env set FOUNDRY_PROJECT_ENDPOINT "https://millennial-mum-foundry.services.ai.azure.com/api/projects/millennial-mum"
-azd env set APPLICATIONINSIGHTS_CONNECTION_STRING "<millennial-mum-insights conn string>"
-azd extension upgrade azure.ai.agents   # needs >= 1.0.0-beta.9
-azd up
+Compress-Archive -Path api\host.json,api\requirements.txt,api\chat -DestinationPath api.zip -Force
+az functionapp deployment source config-zip -n millennial-mum-api -g rg-millennial-mum --src api.zip --build-remote true
 ```
-Capture the output **`AGENT_MILLENNIAL_MUM_RESPONSES_ENDPOINT`** — that's the
-hosted `/responses` endpoint the phone app calls.
+App settings on `millennial-mum-api`: FOUNDRY_AGENT_ENDPOINT (no query string),
+AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET. CORS allow-list includes
+the SWA origin + http://localhost:4280.
 
----
+## Redeploy — PWA (Static Web App)
 
-## 3. Phone app — Azure Static Web App (Free, $0)
-Needs the endpoint from step 2 + a service principal for the proxy's
-client-credentials auth to the agent.
 ```
-az staticwebapp create -n millennial-mum-web -g rg-millennial-mum -l eastus2 --sku Free
-# repo secret used by .github/workflows/azure-static-web-apps.yml:
-az staticwebapp secrets list -n millennial-mum-web   # -> AZURE_STATIC_WEB_APPS_API_TOKEN (set as a GitHub Actions secret)
-# app settings consumed by the api/chat Functions proxy:
-az staticwebapp appsettings set -n millennial-mum-web --setting-names `
-  FOUNDRY_AGENT_ENDPOINT="<AGENT_MILLENNIAL_MUM_RESPONSES_ENDPOINT>" `
-  AZURE_TENANT_ID="46946eec-4e27-4270-876d-953a3b711bf8" `
-  AZURE_CLIENT_ID="<sp app id>" AZURE_CLIENT_SECRET="<sp secret>"
+swa deploy .\frontend --deployment-token <token> --env production
+# token: az staticwebapp secrets list -n millennial-mum-web --query properties.apiKey -o tsv
 ```
-Then push to `main` to trigger the workflow. Post-deploy: update the CORS
-placeholder hostname in `server_af.py` to the real SWA hostname.
+`frontend/app.js` `API_ENDPOINT` points at the Function App URL.
 
-**On iPhone:** open the SWA URL in Safari → Share → **Add to Home Screen**.
-Installable app icon, offline shell, no secrets on device (proxy holds auth).
+## Evals in Foundry — DONE
+
+Portal-tracked (Foundry → project → Evaluations): `mm-decomposed-v2-pretuning`
+(routing 0.86) and `mm-decomposed-baseline-tuned` (routing 0.96, safety 1.0).
+Re-run: `python -m evals.foundry_eval --run evals/results/decomposed.json --name <name>`.
+
+## Follow-ups / hardening
+
+- The Function App endpoint is anonymous (as the SWA managed function was). Add
+  auth (Entra Easy Auth on the Function App, or an SWA-issued header) if the URL
+  is shared beyond the owner.
+- Consider switching the proxy from an SP secret to the Function App's
+  system-assigned managed identity (grant it Azure AI User) to drop the secret.
+- Streaming: first byte is ~1s; a streaming proxy + frontend would make the
+  50–80s replies feel instant.
+- Tool-recall tuning (0.863 → 0.800) is the next eval target.
