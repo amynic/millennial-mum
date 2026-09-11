@@ -18,6 +18,14 @@
     {
       "route": "/manifest.webmanifest",
       "headers": { "Cache-Control": "no-cache" }
+    },
+    {
+      "route": "/app.js",
+      "headers": { "Cache-Control": "no-cache" }
+    },
+    {
+      "route": "/index.html",
+      "headers": { "Cache-Control": "no-cache" }
     }
   ]
 }

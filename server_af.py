@@ -117,17 +117,17 @@ def _item_to_message(item) -> Message | None:
     text = "\n".join(parts).strip()
     if not text:
         return None
-    return Message(role=mapped, contents=text)
+    return Message(role=mapped, contents=[text])
 
 
 async def _build_conversation(request, context) -> list[Message]:
     """Rebuild the full multi-turn transcript from the request input items.
 
     The client (PWA) carries the running transcript and sends it as the
-    Responses ``input`` array (user turns as ``input_text``, prior assistant
-    turns as ``output_text``). We map every message item to a ChatMessage so the
-    orchestrator sees the whole conversation and can answer in context — earlier
-    we passed only the latest user string, which made the agent forget context.
+    Responses ``input`` array. We map every user and assistant message item to a
+    ChatMessage so the orchestrator sees the whole conversation and can answer
+    in context — earlier we passed only the latest user string, which made the
+    agent forget context.
     """
     messages: list[Message] = []
     try:
@@ -141,7 +141,7 @@ async def _build_conversation(request, context) -> list[Message]:
 
     if not messages:
         input_items = request.input if hasattr(request, "input") else []
-        messages = [Message(role="user", contents=_extract_user_message(input_items))]
+        messages = [Message(role="user", contents=[_extract_user_message(input_items)])]
     return messages
 
 
@@ -184,4 +184,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

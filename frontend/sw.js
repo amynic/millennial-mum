@@ -2,13 +2,14 @@
  *
  * Strategy:
  *  - Precache the static shell (HTML/CSS/JS/icons/manifest) on install.
- *  - Serve navigation + static assets cache-first so the app opens instantly
- *    and works offline once installed.
+ *  - Refresh navigation + static assets from the network when available, with
+ *    cached fallbacks for offline use. This prevents an installed PWA from
+ *    running an old app.js after a deployment.
  *  - NEVER cache /api/* — chat requests must always hit the network so the
  *    parent gets a live answer (and no stale replies).
  */
 
-const CACHE = 'mm-shell-v1';
+const CACHE = 'mm-shell-v2';
 const SHELL = [
   '/',
   '/index.html',
@@ -40,19 +41,20 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/api/')) return;
   if (request.method !== 'GET') return;
 
-  // App shell: cache-first, fall back to network, then cached index for navigations.
+  // App shell: network-first so deployed fixes reach installed PWAs immediately.
   event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request)
-        .then((resp) => {
-          if (resp.ok && url.origin === self.location.origin) {
-            const copy = resp.clone();
-            caches.open(CACHE).then((c) => c.put(request, copy));
-          }
-          return resp;
-        })
-        .catch(() => (request.mode === 'navigate' ? caches.match('/index.html') : undefined));
-    })
+    fetch(request)
+      .then((resp) => {
+        if (resp.ok && url.origin === self.location.origin) {
+          const copy = resp.clone();
+          caches.open(CACHE).then((c) => c.put(request, copy));
+        }
+        return resp;
+      })
+      .catch(async () => {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+        return request.mode === 'navigate' ? caches.match('/index.html') : undefined;
+      })
   );
 });

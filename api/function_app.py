@@ -76,9 +76,11 @@ def _build_agent_input(body: dict):
     """Turn the request body into the Responses ``input`` value.
 
     Accepts a full transcript ({"messages": [{role, content}, ...]}, preferred)
-    or a single {"message": "..."} (legacy). Prior assistant turns are sent as
-    ``output_text`` and user/system turns as ``input_text`` so the hosted agent
-    can rebuild the conversation for multi-turn context.
+    or a single {"message": "..."} (legacy). Message content is sent as a
+    string so the hosted Responses server expands every turn to valid
+    ``input_text`` content. ``output_text`` is an output-only shape that also
+    requires annotations and logprobs; using it for assistant history caused
+    the transcript to fail request validation.
     """
     messages = body.get("messages")
     if isinstance(messages, list) and messages:
@@ -86,16 +88,15 @@ def _build_agent_input(body: dict):
         for m in messages[-MAX_TURNS:]:
             if not isinstance(m, dict):
                 continue
-            role = m.get("role", "user")
+            role = "assistant" if m.get("role") == "assistant" else "user"
             text = (m.get("content") or "").strip()
             if not text:
                 continue
-            content_type = "output_text" if role == "assistant" else "input_text"
             agent_input.append(
                 {
                     "type": "message",
                     "role": role,
-                    "content": [{"type": content_type, "text": text}],
+                    "content": text,
                 }
             )
         return agent_input or None

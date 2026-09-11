@@ -9,9 +9,9 @@ import os
 from datetime import datetime
 from pydantic import BaseModel, Field
 from tools._dual import define_tool
+from tools.storage import data_file
 
-# Persist to file in the project directory
-_LIST_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "shopping_list.json")
+_LIST_FILE = data_file("shopping_list.json")
 
 
 def _load_list() -> list[dict]:

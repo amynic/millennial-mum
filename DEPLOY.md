@@ -61,8 +61,18 @@ query string), AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET,
 ALLOWED_ORIGIN (the SWA origin), **PYTHON_ENABLE_INIT_INDEXING=1** and
 **AzureWebJobsFeatureFlags=EnableWorkerIndexing** (both REQUIRED for HTTP
 streaming — without them the worker indexes 0 functions and every call 404s).
-CORS is handled in code (not the platform CORS list), including the OPTIONS
-preflight. Requirements: `azure-functions`, `azurefunctions-extensions-http-fastapi`,
+The Function App platform CORS list must also include the SWA origin; otherwise
+Flex Consumption can intercept the OPTIONS preflight before the Python handler
+adds its headers:
+
+```
+az functionapp cors add -g rg-millennial-mum -n millennial-mum-api-flex \
+  --allowed-origins https://thankful-desert-05e2c3e0f.6.azurestaticapps.net
+az functionapp restart -g rg-millennial-mum -n millennial-mum-api-flex
+```
+
+The handler still returns CORS headers for POST and OPTIONS responses.
+Requirements: `azure-functions`, `azurefunctions-extensions-http-fastapi`,
 `httpx`. The legacy `millennial-mum-api` (Consumption, non-streaming) has been
 deleted — V2 runs entirely on `millennial-mum-api-flex`.
 
