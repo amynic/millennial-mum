@@ -9,7 +9,7 @@ import urllib.parse
 import azure.functions as func
 
 FOUNDRY_AGENT_ENDPOINT = os.environ.get("FOUNDRY_AGENT_ENDPOINT")
-API_VERSION = "2025-11-15-preview"
+API_VERSION = "v1"
 
 _cached_token = None
 _token_expiry = 0
