@@ -1,18 +1,19 @@
 """Family profile memory for Millennial Mum.
 
 Persists family details (children, work schedule, routines, preferences)
-to a local JSON file so the agent remembers across sessions.
+via ``tools.storage``, which uses Azure Blob Storage when configured (durable
+and shared across container replicas) and a local file otherwise, so the agent
+remembers across sessions.
 """
 
-import json
-import os
+import asyncio
 from datetime import datetime
 from pydantic import BaseModel, Field
 from tools._dual import define_tool
-from tools.storage import data_file
-from typing import Optional
+from tools import storage
+from typing import Callable, Optional
 
-_PROFILE_FILE = data_file("family_profile.json", copy_packaged_default=True)
+_PROFILE_NAME = "family_profile.json"
 
 DEFAULT_PROFILE = {
     "children": [],
@@ -26,17 +27,23 @@ DEFAULT_PROFILE = {
 }
 
 
-def _load_profile() -> dict:
-    if os.path.exists(_PROFILE_FILE):
-        with open(_PROFILE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return DEFAULT_PROFILE.copy()
+def _read_profile() -> Optional[dict]:
+    """Return the stored profile, or None if nothing has been saved yet."""
+    data = storage.read_json(_PROFILE_NAME, seed_from_package=True).data
+    return data if isinstance(data, dict) else None
 
 
-def _save_profile(profile: dict):
-    profile["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-    with open(_PROFILE_FILE, "w", encoding="utf-8") as f:
-        json.dump(profile, f, indent=2, ensure_ascii=False)
+def _update_profile(mutator: Callable[[dict], object]) -> tuple[dict, object]:
+    """Apply ``mutator`` to the stored profile, retrying on concurrent writes."""
+
+    def _mutate(profile: dict):
+        result = mutator(profile)
+        profile["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        return result
+
+    return storage.update_json(
+        _PROFILE_NAME, _mutate, default=DEFAULT_PROFILE, seed_from_package=True
+    )
 
 
 def _format_profile(profile: dict) -> str:
@@ -162,38 +169,39 @@ class UpdateChildParams(BaseModel):
 
 @define_tool(description="Save or update a child's details in the family profile. Use when a parent mentions their child's name, age, allergies, preferences, or any personal details worth remembering.", skip_permission=True)
 async def save_child(params: UpdateChildParams) -> str:
-    profile = _load_profile()
-    children = profile.get("children", [])
+    def mutate(profile: dict) -> None:
+        children = profile.get("children", [])
 
-    # Find existing child by name or add new
-    existing = None
-    for child in children:
-        if child.get("name", "").lower() == params.name.lower():
-            existing = child
-            break
+        # Find existing child by name or add new
+        existing = None
+        for child in children:
+            if child.get("name", "").lower() == params.name.lower():
+                existing = child
+                break
 
-    if existing is None:
-        existing = {"name": params.name}
-        children.append(existing)
+        if existing is None:
+            existing = {"name": params.name}
+            children.append(existing)
 
-    # Update only provided fields
-    if params.age is not None:
-        existing["age"] = params.age
-    if params.dob is not None:
-        existing["dob"] = params.dob
-    if params.allergies is not None:
-        existing["allergies"] = params.allergies
-    if params.fussy_eating is not None:
-        existing["fussy_eating"] = params.fussy_eating
-    if params.loves is not None:
-        existing["loves"] = params.loves
-    if params.nappy_size is not None:
-        existing["nappy_size"] = params.nappy_size
-    if params.notes is not None:
-        existing["notes"] = params.notes
+        # Update only provided fields
+        if params.age is not None:
+            existing["age"] = params.age
+        if params.dob is not None:
+            existing["dob"] = params.dob
+        if params.allergies is not None:
+            existing["allergies"] = params.allergies
+        if params.fussy_eating is not None:
+            existing["fussy_eating"] = params.fussy_eating
+        if params.loves is not None:
+            existing["loves"] = params.loves
+        if params.nappy_size is not None:
+            existing["nappy_size"] = params.nappy_size
+        if params.notes is not None:
+            existing["notes"] = params.notes
 
-    profile["children"] = children
-    _save_profile(profile)
+        profile["children"] = children
+
+    await asyncio.to_thread(_update_profile, mutate)
     return f"✅ Saved details for {params.name}. I'll remember this for next time!"
 
 
@@ -207,22 +215,23 @@ class UpdateWorkScheduleParams(BaseModel):
 
 @define_tool(description="Save the parent's work schedule. Use when they mention work days, hours, WFH days, or commute.", skip_permission=True)
 async def save_work_schedule(params: UpdateWorkScheduleParams) -> str:
-    profile = _load_profile()
-    ws = profile.get("work_schedule", {})
+    def mutate(profile: dict) -> None:
+        ws = profile.get("work_schedule", {})
 
-    if params.work_days is not None:
-        ws["work_days"] = params.work_days
-    if params.work_hours is not None:
-        ws["work_hours"] = params.work_hours
-    if params.wfh_days is not None:
-        ws["wfh_days"] = params.wfh_days
-    if params.commute_time is not None:
-        ws["commute_time"] = params.commute_time
-    if params.notes is not None:
-        ws["notes"] = params.notes
+        if params.work_days is not None:
+            ws["work_days"] = params.work_days
+        if params.work_hours is not None:
+            ws["work_hours"] = params.work_hours
+        if params.wfh_days is not None:
+            ws["wfh_days"] = params.wfh_days
+        if params.commute_time is not None:
+            ws["commute_time"] = params.commute_time
+        if params.notes is not None:
+            ws["notes"] = params.notes
 
-    profile["work_schedule"] = ws
-    _save_profile(profile)
+        profile["work_schedule"] = ws
+
+    await asyncio.to_thread(_update_profile, mutate)
     return "✅ Work schedule saved. I'll factor this into scheduling from now on."
 
 
@@ -238,26 +247,27 @@ class UpdateChildcareParams(BaseModel):
 
 @define_tool(description="Save childcare details (nursery, school, childminder). Use when a parent mentions childcare arrangements.", skip_permission=True)
 async def save_childcare(params: UpdateChildcareParams) -> str:
-    profile = _load_profile()
-    cc = profile.get("childcare", {})
+    def mutate(profile: dict) -> None:
+        cc = profile.get("childcare", {})
 
-    if params.type is not None:
-        cc["type"] = params.type
-    if params.name is not None:
-        cc["name"] = params.name
-    if params.days is not None:
-        cc["days"] = params.days
-    if params.hours is not None:
-        cc["hours"] = params.hours
-    if params.drop_off is not None:
-        cc["drop_off"] = params.drop_off
-    if params.pick_up is not None:
-        cc["pick_up"] = params.pick_up
-    if params.notes is not None:
-        cc["notes"] = params.notes
+        if params.type is not None:
+            cc["type"] = params.type
+        if params.name is not None:
+            cc["name"] = params.name
+        if params.days is not None:
+            cc["days"] = params.days
+        if params.hours is not None:
+            cc["hours"] = params.hours
+        if params.drop_off is not None:
+            cc["drop_off"] = params.drop_off
+        if params.pick_up is not None:
+            cc["pick_up"] = params.pick_up
+        if params.notes is not None:
+            cc["notes"] = params.notes
 
-    profile["childcare"] = cc
-    _save_profile(profile)
+        profile["childcare"] = cc
+
+    await asyncio.to_thread(_update_profile, mutate)
     return "✅ Childcare details saved. I'll remember this for scheduling."
 
 
@@ -268,16 +278,17 @@ class UpdateFamilyInfoParams(BaseModel):
 
 @define_tool(description="Save family info (partner details, household, medical contacts, preferences). Use when a parent mentions their partner, home, GP, dietary needs, or budget.", skip_permission=True)
 async def save_family_info(params: UpdateFamilyInfoParams) -> str:
-    profile = _load_profile()
     valid_sections = ["partner", "household", "medical", "preferences"]
 
     if params.section not in valid_sections:
         return f"Unknown section '{params.section}'. Use one of: {', '.join(valid_sections)}"
 
-    current = profile.get(params.section, {})
-    current.update(params.data)
-    profile[params.section] = current
-    _save_profile(profile)
+    def mutate(profile: dict) -> None:
+        current = profile.get(params.section, {})
+        current.update(params.data)
+        profile[params.section] = current
+
+    await asyncio.to_thread(_update_profile, mutate)
 
     labels = {
         "partner": "Partner details",
@@ -294,9 +305,9 @@ class GetProfileParams(BaseModel):
 
 @define_tool(description="Get the saved family profile. Use at the start of conversations to load context, or when the parent asks what you know about them.", skip_permission=True)
 async def get_family_profile(params: GetProfileParams) -> str:
-    profile = _load_profile()
+    profile = await asyncio.to_thread(_read_profile)
 
-    if not os.path.exists(_PROFILE_FILE):
+    if profile is None:
         return (
             "No family profile set up yet! Tell me about your family and I'll remember:\n"
             "- Your children (names, ages, allergies, likes)\n"
@@ -314,10 +325,10 @@ def get_profile_context() -> str:
 
     Called at session start to inject family context.
     """
-    if not os.path.exists(_PROFILE_FILE):
+    profile = _read_profile()
+    if profile is None:
         return ""
 
-    profile = _load_profile()
     formatted = _format_profile(profile)
 
     if formatted == "No family profile set up yet.":

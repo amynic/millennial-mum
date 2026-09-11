@@ -76,6 +76,42 @@ Requirements: `azure-functions`, `azurefunctions-extensions-http-fastapi`,
 `httpx`. The legacy `millennial-mum-api` (Consumption, non-streaming) has been
 deleted — V2 runs entirely on `millennial-mum-api-flex`.
 
+## Durable tool storage (shopping list + family profile)
+
+The JSON-backed tools persist to **Azure Blob Storage**, not the container
+filesystem. The hosted agent's disk is ephemeral and per-replica, so the old
+`MM_DATA_DIR=/tmp/millennial-mum` setting meant a shopping list added in one
+conversation was gone in the next. `tools/storage.py` now writes each document
+as a blob and guards every update with the blob's ETag (`If-Match`), so two
+concurrent turns can't clobber each other.
+
+One-time setup (reuses the existing `mmumapi4095` account; the container is
+created automatically on first write):
+
+```
+# Let the hosted agent's managed identity read/write blobs
+az role assignment create \
+  --role "Storage Blob Data Contributor" \
+  --assignee <hosted-agent-principal-id> \
+  --scope $(az storage account show -g rg-millennial-mum -n mmumapi4095 --query id -o tsv)
+
+azd env set MM_BLOB_ACCOUNT_URL https://mmumapi4095.blob.core.windows.net
+azd deploy millennial-mum
+```
+
+Verify after deploy — add an item, then start a **fresh** conversation and ask
+for the list:
+
+```
+az storage blob list --account-name mmumapi4095 -c millennial-mum \
+  --auth-mode login -o table
+```
+
+Local dev needs nothing: with `MM_BLOB_ACCOUNT_URL` unset the tools fall back to
+a local file (`MM_DATA_DIR`, or the repo root). `MM_BLOB_PREFIX` is reserved for
+per-family blob paths once the app is multi-tenant — today every user of a
+deployment shares one list.
+
 ## Redeploy — PWA (Static Web App)
 
 ```

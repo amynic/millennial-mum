@@ -16,7 +16,6 @@ COPY server_af.py .
 COPY agents/ ./agents/
 COPY tools/ ./tools/
 COPY family_profile.json .
-COPY shopping_list.json .
 
 EXPOSE 8088
 

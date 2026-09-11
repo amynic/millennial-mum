@@ -6,6 +6,7 @@ agent-framework
 agent-framework-anthropic
 azure-ai-projects>=2.3.0
 azure-identity
+azure-storage-blob
 azure-ai-agentserver-responses
 pydantic>=2.0
 python-dotenv
