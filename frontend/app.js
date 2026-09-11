@@ -2,6 +2,7 @@ const chatContainer = document.getElementById('chatContainer');
 const chatForm = document.getElementById('chatForm');
 const userInput = document.getElementById('userInput');
 const sendBtn = document.getElementById('sendBtn');
+const newChatBtn = document.getElementById('newChatBtn');
 
 // API endpoint — standalone Azure Functions proxy that holds Foundry auth
 // server-side (client-credentials) and forwards to the hosted agent. It lives
@@ -9,7 +10,43 @@ const sendBtn = document.getElementById('sendBtn');
 // 45s Static Web Apps managed-functions gateway limit.
 const API_ENDPOINT = 'https://millennial-mum-api.azurewebsites.net/api/chat';
 
+// Running transcript so the agent has multi-turn context. The client owns the
+// history and sends it on every turn; persisted so closing/reopening the
+// installed PWA keeps the conversation.
+const HISTORY_KEY = 'mm-history-v1';
+const MAX_TURNS = 24;
+let history = loadHistory();
+
 let isProcessing = false;
+
+function loadHistory() {
+    try {
+        const raw = localStorage.getItem(HISTORY_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
+function saveHistory() {
+    try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-MAX_TURNS)));
+    } catch {
+        /* storage full / unavailable — non-fatal */
+    }
+}
+
+// Re-render any persisted conversation on load (keep the welcome bubble only
+// when there's no history yet).
+function restoreHistory() {
+    if (!history.length) return;
+    const welcome = chatContainer.querySelector('.message.assistant');
+    if (welcome) welcome.remove();
+    for (const turn of history) {
+        appendMessage(turn.role === 'assistant' ? 'assistant' : 'user', turn.content);
+    }
+}
 
 chatForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -17,6 +54,8 @@ chatForm.addEventListener('submit', async (e) => {
     if (!message || isProcessing) return;
 
     appendMessage('user', message);
+    history.push({ role: 'user', content: message });
+    saveHistory();
     userInput.value = '';
     setProcessing(true);
 
@@ -26,7 +65,7 @@ chatForm.addEventListener('submit', async (e) => {
         const response = await fetch(API_ENDPOINT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message }),
+            body: JSON.stringify({ messages: history.slice(-MAX_TURNS) }),
         });
 
         if (!response.ok) {
@@ -36,7 +75,10 @@ chatForm.addEventListener('submit', async (e) => {
         const data = await response.json();
         removeTypingIndicator(typingEl);
 
-        appendMessage('assistant', data.reply || 'No response received.');
+        const reply = data.reply || 'No response received.';
+        appendMessage('assistant', reply);
+        history.push({ role: 'assistant', content: reply });
+        saveHistory();
     } catch (error) {
         removeTypingIndicator(typingEl);
         appendMessage('assistant', '⚠️ Sorry, something went wrong. Please try again.');
@@ -46,6 +88,20 @@ chatForm.addEventListener('submit', async (e) => {
         userInput.focus();
     }
 });
+
+if (newChatBtn) {
+    newChatBtn.addEventListener('click', () => {
+        if (isProcessing) return;
+        history = [];
+        saveHistory();
+        chatContainer.innerHTML = '';
+        appendMessage(
+            'assistant',
+            "👋 Fresh start! What do you need help with — meals, the schedule, an email, or a health worry?"
+        );
+        userInput.focus();
+    });
+}
 
 function extractReply(data) {
     // Try structured output first
@@ -142,3 +198,5 @@ if ('serviceWorker' in navigator) {
         });
     });
 }
+
+restoreHistory();

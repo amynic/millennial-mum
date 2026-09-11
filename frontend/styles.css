@@ -38,7 +38,24 @@ body {
     text-align: center;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
+    position: relative;
 }
+
+.new-chat-btn {
+    position: absolute;
+    top: 50%;
+    right: 1rem;
+    transform: translateY(-50%);
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+    color: var(--primary);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.new-chat-btn:hover { background: var(--bg, #fff0f4); }
 
 .header h1 {
     font-size: 1.5rem;

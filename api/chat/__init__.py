@@ -56,13 +56,41 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json",
         )
 
-    user_message = body.get("message", "")
-    if not user_message:
-        return func.HttpResponse(
-            json.dumps({"reply": "Missing 'message' field"}),
-            status_code=400,
-            mimetype="application/json",
-        )
+    # Accept either a full transcript ({"messages": [{role, content}, ...]},
+    # preferred — enables multi-turn context) or a single {"message": "..."}
+    # (legacy). Build the Responses `input` array with per-turn roles: user/
+    # system turns as input_text, prior assistant turns as output_text.
+    messages = body.get("messages")
+    if isinstance(messages, list) and messages:
+        agent_input = []
+        for m in messages[-24:]:
+            if not isinstance(m, dict):
+                continue
+            role = m.get("role", "user")
+            text = (m.get("content") or "").strip()
+            if not text:
+                continue
+            content_type = "output_text" if role == "assistant" else "input_text"
+            agent_input.append({
+                "type": "message",
+                "role": role,
+                "content": [{"type": content_type, "text": text}],
+            })
+        if not agent_input:
+            return func.HttpResponse(
+                json.dumps({"reply": "Missing message content"}),
+                status_code=400,
+                mimetype="application/json",
+            )
+    else:
+        user_message = body.get("message", "")
+        if not user_message:
+            return func.HttpResponse(
+                json.dumps({"reply": "Missing 'message' field"}),
+                status_code=400,
+                mimetype="application/json",
+            )
+        agent_input = user_message
 
     try:
         token = get_access_token()
@@ -74,7 +102,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json",
         )
 
-    payload = json.dumps({"input": user_message}).encode("utf-8")
+    payload = json.dumps({"input": agent_input}).encode("utf-8")
     url = f"{FOUNDRY_AGENT_ENDPOINT}?api-version={API_VERSION}"
 
     request = urllib.request.Request(

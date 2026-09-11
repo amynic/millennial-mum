@@ -1,0 +1,23 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/assets/*", "/icons/*", "/api/*", "/sw.js", "/manifest.webmanifest"]
+  },
+  "mimeTypes": {
+    ".webmanifest": "application/manifest+json",
+    ".json": "application/json"
+  },
+  "routes": [
+    {
+      "route": "/sw.js",
+      "headers": {
+        "Cache-Control": "no-cache",
+        "Service-Worker-Allowed": "/"
+      }
+    },
+    {
+      "route": "/manifest.webmanifest",
+      "headers": { "Cache-Control": "no-cache" }
+    }
+  ]
+}

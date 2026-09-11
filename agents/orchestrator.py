@@ -79,10 +79,15 @@ class Orchestrator:
             input_model=SpecialistRequest,
         )
 
-    async def run(self, query: str):
-        """Run one turn; returns the composed AgentResponse."""
+    async def run(self, messages):
+        """Run one turn; returns the composed AgentResponse.
+
+        ``messages`` may be a single query string (used by the eval harness) or
+        a list of ChatMessage covering the full conversation so far (used by the
+        hosted server for multi-turn context). Agent Framework accepts both.
+        """
         self._trace = RunTrace()
-        return await self.agent.run(query)
+        return await self.agent.run(messages)
 
     def _capture_orchestrator_tools(self, response) -> None:
         """Record the orchestrator's own tool calls (memory) into the trace.
@@ -101,9 +106,12 @@ class Orchestrator:
             self._trace.tool_calls.append(name)
             self._trace.agents_used.append("memory")
 
-    async def run_traced(self, query: str) -> dict:
-        """Run one turn and return text + routing/tool trace (for evals)."""
-        response = await self.run(query)
+    async def run_traced(self, messages) -> dict:
+        """Run one turn and return text + routing/tool trace (for evals).
+
+        Accepts a query string or a full ChatMessage list (see :meth:`run`).
+        """
+        response = await self.run(messages)
         self._capture_orchestrator_tools(response)
         return {
             "response": _agent_text(response),
