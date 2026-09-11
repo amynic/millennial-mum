@@ -1,186 +1,58 @@
-# Millennial Mum 🍼💼
+# Millennial Mum 🍼💼 — V2
 
-The ultimate AI copilot for working parents juggling careers and small children.
+The AI copilot for working parents juggling careers and small children — now a
+**decomposed, multi-agent system hosted on [Azure AI Foundry](https://learn.microsoft.com/azure/ai-foundry/)**,
+fronted by an installable phone **PWA** with **streaming replies** and
+**multi-turn memory**.
 
-Built with the [GitHub Copilot Python SDK](https://github.com/github/copilot-sdk), hosted on [Azure AI Foundry](https://learn.microsoft.com/azure/ai-foundry/) with a [Static Web App](https://learn.microsoft.com/azure/static-web-apps/) frontend.
+> **V2 = decomposed + hosted + streaming.** V1 was one big GitHub-Copilot-SDK
+> agent with 19 flat-loaded tools. V2 splits that into a triage orchestrator over
+> per-domain specialists on Microsoft Agent Framework, each on its own Foundry
+> catalog model, deployed as a Foundry hosted agent, and streamed end-to-end to
+> the phone. The original monolith still lives in the repo (`app.py`, `server.py`)
+> for reference; everything below describes V2.
 
-## Features
+## What it does
 
-- 🍱 **Meal Planner** — Quick healthy kid-friendly meals from what you have
-- 📅 **Schedule Manager** — Juggle childcare, school runs, work, appointments
-- 🎨 **Activity Finder** — Age-appropriate activities for available time/weather
-- 💰 **Budget Helper** — Track family spend, find savings
-- 📝 **Admin Autopilot** — Draft school emails, absence notes, appointment reminders
-- 🛒 **Shopping List** — Running list that captures items as mentioned
-- 🚨 **Emergency Quick-Ref** — NHS-sourced guidance for toddler health concerns
-- 🧠 **Family Memory** — Remembers your family details across sessions
+- 🍱 **Meals & shopping** — quick kid-friendly meals + a running shopping list
+- 📅 **Schedule & activities** — childcare, school runs, age-appropriate activities
+- 💰 **Admin & budget** — draft school emails/absence notes, track family spend
+- 🚨 **Health** — calm, NHS-sourced toddler guidance (never diagnoses)
+- 🧠 **Family memory** — remembers your children, work pattern, childcare, prefs
+- 💬 **Conversational** — full multi-turn context; the reply **streams in** as it's written
+- 📱 **On your phone** — installable PWA, add to Home Screen, works offline (shell)
 
-## Prerequisites
-
-- Python 3.11+
-- GitHub Copilot CLI installed (`gh copilot` or standalone)
-- `gh auth login` + `gh auth refresh --scopes copilot`
-
-## Setup
-
-```bash
-cd millennial-mum
-python -m venv .venv
-.venv\Scripts\activate      # Windows
-# source .venv/bin/activate  # Mac/Linux
-pip install -r requirements.txt
-```
-
-## CLI Mode (Original)
-
-You can still run the agent locally as a CLI chat:
-
-```bash
-python app.py
-```
-
-## Architecture
-
-```mermaid
-graph LR
-    A[Static Web App<br/>Chat UI] -->|/responses| B[Foundry Hosted Agent<br/>server.py]
-    B --> C[Copilot SDK]
-    C --> D[GitHub Copilot LLM]
-    B --> E[Tools: meals, schedule,<br/>budget, activities...]
-```
-
-```
-millennial-mum/
-├── app.py                  # CLI entry point (local interactive chat)
-├── server.py               # Foundry hosted agent server (responses protocol)
-├── agent_config.py         # System prompt & agent personality
-├── agent.yaml              # Foundry agent deployment config
-├── Dockerfile              # Container image for Foundry hosting
-├── requirements.txt        # CLI dependencies
-├── requirements-hosted.txt # Server dependencies
-├── tools/
-│   ├── __init__.py
-│   ├── meal_planner.py     # Meal suggestions & grocery lists
-│   ├── schedule.py         # Calendar & reminder management
-│   ├── activities.py       # Activity finder by age/time/weather
-│   ├── budget.py           # Family budget tracking
-│   ├── admin.py            # Email drafts, forms, notes
-│   ├── shopping_list.py    # Shopping list management
-│   ├── emergency.py        # NHS emergency quick-ref
-│   └── memory.py           # Family profile memory
-├── frontend/               # Web UI (Azure Static Web Apps)
-│   ├── index.html          # Chat interface
-│   ├── styles.css          # Styling
-│   └── app.js              # Frontend logic
-├── staticwebapp.config.json # SWA routing config
-└── swa-cli.config.json     # SWA CLI dev config
-```
-
-## Step 1: Deploy Agent to Foundry
-
-The agent runs as a hosted container in Azure AI Foundry.
-
-### Local Testing
-
-```bash
-cd millennial-mum
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements-hosted.txt
-
-# Create .env with your GITHUB_TOKEN
-cp .env.example .env
-# Edit .env and add your token
-
-python server.py
-# Agent starts on http://localhost:8088
-```
-
-Test with curl:
-```bash
-curl -X POST http://localhost:8088/responses \
-  -H "Content-Type: application/json" \
-  -d '{"input": [{"role": "user", "content": "What can I make with pasta and cheese?"}]}'
-```
-
-### Deploy to Foundry
-
-Once local testing works, deploy to Foundry:
-```bash
-# Build container (must be linux/amd64)
-docker build --platform linux/amd64 -t millennial-mum .
-
-# Then use: deploy agent to foundry
-```
-
-## Step 2: Web UI (Azure Static Web Apps)
-
-The frontend calls the Foundry agent directly — no backend proxy needed.
-
-### Local Development
-
-```bash
-npm install -g @azure/static-web-apps-cli
-swa start
-```
-
-The UI defaults to `http://localhost:8088` for the agent endpoint (set in `app.js`).
-
-### Deploy to Azure
-
-```bash
-az staticwebapp create \
-  --name millennial-mum \
-  --resource-group <your-rg> \
-  --location "West Europe" \
-  --sku Free
-
-# Deploy
-swa deploy \
-  --app-location frontend \
-  --deployment-token <your-token>
-```
-
-Update `AGENT_ENDPOINT` in `frontend/app.js` to your Foundry agent URL before deploying.
-
-Once running locally, this agent can be wrapped with the Microsoft Agent Framework
-hosting adapter and deployed to Microsoft Foundry as a hosted agent with:
-- Hosted models (GPT-4o, GPT-5)
-- Foundry Toolbox (web search, AI search, etc.)
-- Production eval & tracing
-
----
-
-# Decomposed architecture (per-domain agents on Microsoft Agent Framework)
-
-The original monolith is one system prompt + one Copilot SDK session with **19 tools
-across 8 domains** flat-loaded. The decomposed system splits this into a **triage
-orchestrator** that routes to **four domain specialists** plus a **shared memory
-service**, each specialist on **its own Foundry catalog model**. This lives alongside
-the monolith (nothing above was deleted) under `agents/`, `server_af.py`, and
-`agent-af.yaml`.
+## Architecture (V2)
 
 ```mermaid
 graph TD
-    UI[Static Web App / iPhone PWA] --> API[/api/chat auth proxy/]
-    API --> ORCH[Triage Orchestrator<br/>router-as-tools · Katherine-Ryan voice]
+    UI[iPhone PWA / Static Web App<br/>streams reply · carries transcript] -->|"POST /api/chat (full history)"| API[Flex Consumption Function App<br/>millennial-mum-api-flex · streaming proxy]
+    API -->|client-credentials SP token| AG[Foundry Hosted Agent<br/>server_af.py · streams deltas]
+    AG --> ORCH[Triage Orchestrator<br/>router-as-tools · Katherine-Ryan voice]
     ORCH --> K[Kitchen Specialist]
     ORCH --> P[Planner Specialist]
     ORCH --> A[Admin & Budget Specialist]
     ORCH --> H[Health Specialist 🚨 calm, NHS-only]
     ORCH -.reads/writes.-> MEM[(Shared Family Memory)]
-    K -.-> MEM
-    P -.-> MEM
-    A -.-> MEM
-    H -.-> MEM
 ```
 
-### Agent → domain → provisioned model slate
+**Flow:** the PWA owns the running transcript and sends it every turn → the
+**Flex Consumption** proxy injects the Foundry service-principal token
+(server-side, no secrets on the device) and opens a streaming call → the hosted
+agent routes to specialist(s), composes one reply in voice, and **streams text
+deltas** back → the proxy relays them as `text/plain` chunks → the PWA renders the
+answer progressively.
 
-Deployments are **role-named** (not model-named) so per-agent cost is its own line
-in Foundry and the app is decoupled from the underlying model. Models are
-env-overridable and span providers (GPT-5 family + DeepSeek). `gpt-4.x` is excluded
-(deprecated).
+Why the proxy is its own Function App (not SWA managed functions): warm
+multi-agent replies run 28–80s and SWA managed functions cap at 45s. Real HTTP
+streaming also requires **Flex Consumption + the v2 Python model** — the legacy
+Consumption plan can't stream.
+
+## Agent → domain → model slate
+
+Foundry deployments are **role-named** (not model-named) so per-agent cost is its
+own line in the portal and the app is decoupled from the underlying model. Models
+are env-overridable and span providers (GPT-5 family + DeepSeek).
 
 | Agent | Domains | Deployment (role) | Underlying model | Env var |
 |-------|---------|-------------------|------------------|---------|
@@ -191,113 +63,124 @@ env-overridable and span providers (GPT-5 family + DeepSeek). `gpt-4.x` is exclu
 | Health 🚨 | emergency | `health` | `gpt-5` (full) | `MM_HEALTH_MODEL` |
 | Shared Memory | memory | `memory` | `gpt-5-nano` | `MM_MEMORY_MODEL` |
 
-**On Claude Sonnet 5:** it's the recommended premium pick for Admin & Budget /
-Health, but it's a paid Azure **Marketplace** offer and can't be deployed on an
-internal/sandbox subscription (as used here). On a paid subscription, create a
-`claude-sonnet-5` deployment and point `MM_HEALTH_MODEL` / `MM_ADMIN_BUDGET_MODEL`
-at it — no code change. DeepSeek-V3.2 (Admin & Budget) is ~6× cheaper on output
-than Claude and, on Foundry, is **Microsoft-hosted in-region** (data stays in Azure).
-
 Per-1M-token cost of the slate: `gpt-5-nano` $0.05/$0.40 · `gpt-5-mini` $0.25/$2 ·
-`DeepSeek-V3.2` $0.58/$1.68 · `gpt-5` $1.25/$10 · (`claude-sonnet-5` $2/$10).
+`DeepSeek-V3.2` $0.58/$1.68 · `gpt-5` $1.25/$10. DeepSeek-V3.2 (Admin & Budget) is
+Microsoft-hosted in-region on Foundry (data stays in Azure) and ~6× cheaper on
+output than Claude. **Claude Sonnet 5** is the premium pick for Health / Admin &
+Budget but is a paid Marketplace offer — on a paid subscription, create a
+`claude-sonnet-5` deployment and point `MM_HEALTH_MODEL` / `MM_ADMIN_BUDGET_MODEL`
+at it with no code change.
 
-### Layout (new)
+## Live resources
+
+See **[DEPLOY.md](DEPLOY.md)** for the full runbook. In brief (rg `rg-millennial-mum`,
+sub *ai-team*, region **eastus**):
+
+| Piece | Resource | URL |
+|---|---|---|
+| Foundry project | `millennial-mum-foundry` / `millennial-mum` | `…/api/projects/millennial-mum` |
+| Hosted agent | `millennial-mum` (Foundry hosted agent, code deploy) | `…/agents/millennial-mum/endpoint/protocols/openai/responses?api-version=v1` |
+| Phone PWA | `millennial-mum-web` (Static Web App, Free) | https://thankful-desert-05e2c3e0f.6.azurestaticapps.net |
+| API proxy | `millennial-mum-api-flex` (Functions, **Flex Consumption**, v2 model, streaming) | https://millennial-mum-api-flex.azurewebsites.net/api/chat |
+| Proxy auth | SP `millennial-mum-web-proxy`, role **Azure AI User** on the Foundry account | client-credentials |
+
+## Repo layout (V2)
 
 ```
 agents/
 ├── config.py          # model map + specialist/orchestrator prompts (Katherine Ryan voice)
-├── clients.py         # lazy Foundry / Anthropic-on-Foundry client factory
-├── tool_adapter.py    # Copilot tool impls → Agent Framework FunctionTools
-├── specialists.py     # builds the 4 domain specialists
-├── orchestrator.py    # router-as-tools triage + routing trace (run_traced)
+├── clients.py         # lazy Foundry client factory (per-role deployment)
+├── tool_adapter.py    # domain tool impls → Agent Framework FunctionTools
+├── specialists.py     # builds the domain specialists
+├── orchestrator.py    # router-as-tools triage; run_traced (evals) + stream_traced (serving)
 ├── memory_service.py  # shared family memory (read + write)
 ├── observability.py   # OpenTelemetry → Application Insights
 └── app.py             # local CLI entrypoint
-server_af.py           # Foundry hosted-agent server (responses protocol)
+server_af.py           # Foundry hosted-agent server (rebuilds transcript, streams deltas)
 agent-af.yaml          # decomposed hosted-agent manifest
-requirements-agents.txt
+api/
+└── function_app.py    # Flex Consumption v2 proxy — streaming SSE relay + SP auth
+frontend/              # installable PWA (streams reply, persists transcript)
 evals/                 # 50-case dataset + harness (see below)
+requirements-agents.txt
+
+# V1 (reference only): app.py, server.py, agent_config.py, tools/
 ```
 
-Run the decomposed system locally (needs a Foundry project + `az login`):
+## Run it locally
+
+Needs a Foundry project + `az login` with the data-plane role (Azure AI User).
 
 ```bash
 pip install -r requirements-agents.txt
 az login
-setx FOUNDRY_PROJECT_ENDPOINT "https://<project>.services.ai.azure.com/..."
+setx FOUNDRY_PROJECT_ENDPOINT "https://<project>.services.ai.azure.com/api/projects/<project>"
+# one-shot:
 python -m agents.app "Plan dinner and sort the school run — my son is 3."
-# or serve it:
-python server_af.py
+# or serve the hosted-agent locally:
+python server_af.py     # http://localhost:8088
 ```
+
+## Deploy
+
+Full steps + required app settings are in **[DEPLOY.md](DEPLOY.md)**. Short version:
+
+```bash
+# hosted agent (rebuilds server_af.py into a new agent version)
+azd deploy millennial-mum
+
+# streaming proxy (Flex Consumption, v2 model — needs Functions Core Tools for the remote build)
+cd api && func azure functionapp publish millennial-mum-api-flex --python
+
+# PWA
+swa deploy .\frontend --deployment-token <token> --env production
+```
+
+> Streaming gotcha: the proxy needs `PYTHON_ENABLE_INIT_INDEXING=1` **and**
+> `AzureWebJobsFeatureFlags=EnableWorkerIndexing` — without them the worker
+> indexes 0 functions and every call 404s.
 
 ## Evaluations
 
-A **50-case dataset** (`evals/dataset.jsonl`: 20 easy / 20 medium / 10 hard, incl. 10
-safety-critical health cases) measures the monolith **baseline** vs the **decomposed**
-system. Custom evaluators are **pure Python** (routing accuracy, tool-call P/R/F1,
-NHS-source-only, no-diagnosis) and run anywhere with no cloud dependency:
+A **50-case dataset** (`evals/dataset.jsonl`: 20 easy / 20 medium / 10 hard, incl.
+10 safety-critical health cases). Custom evaluators are **pure Python** (routing
+accuracy, tool-call P/R/F1, NHS-source-only, no-diagnosis) and run anywhere:
 
 ```bash
-# offline self-test — no credentials needed, validates harness + all 50 cases
+# offline self-test — no credentials needed
 python -m evals.run_eval --self-test
 
-# baseline (monolith) with Azure AI judges (needs Foundry + a judge model)
+# with Azure AI judges (needs Foundry + a judge model)
 pip install -r evals/requirements.txt
-python -m evals.run_eval --target baseline --azure-judges
-
-# after decomposition
 python -m evals.run_eval --target decomposed --azure-judges
 ```
 
-`--azure-judges` adds the Azure AI Evaluation SDK judges (Intent Resolution, Task
-Adherence, Groundedness, Relevance, Coherence, Fluency, optional Content Safety) and
-**fails loudly** if the SDK/endpoint isn't configured — it never silently downgrades.
+The current decomposed runs are the **baseline** going forward: portal-tracked in
+Foundry → Evaluations (`mm-decomposed-baseline-tuned`: routing **0.96**, safety
+**1.0**). Re-run after any agent change to check for regressions:
+`python -m evals.foundry_eval --run evals/results/decomposed.json --name <name>`.
 
 ## Observability & per-agent cost
 
-Set `APPLICATIONINSIGHTS_CONNECTION_STRING` (from the App Insights resource linked to
-your Foundry project) and `agents/observability.py` exports OpenTelemetry traces for
-every orchestrator hop and specialist/tool call. Deploying each specialist as a named
-Foundry agent gives **per-agent cost** breakdowns in the portal (Operate → Overview,
-Assets → Agents *Estimated costs*, Build → Agents → Monitor). Tag resources with
-`app=millennial-mum` for Cost Management grouping. Prompt/response content is **off**
-traces by default (family/health data) — opt in with `MM_TRACE_SENSITIVE_DATA=true`.
+Set `APPLICATIONINSIGHTS_CONNECTION_STRING` (from the App Insights resource linked
+to the Foundry project) and `agents/observability.py` exports OpenTelemetry traces
+for every orchestrator hop and specialist/tool call. Role-named deployments give
+**per-agent cost** in the portal (Operate → Overview; Build → Agents → Monitor).
+Prompt/response content is **off** traces by default (family/health data) — opt in
+with `MM_TRACE_SENSITIVE_DATA=true`.
 
 ## Install on iPhone (PWA)
 
-The frontend is an installable Progressive Web App (`frontend/manifest.webmanifest`,
-`frontend/sw.js`, apple-touch icons, safe-area insets for the notch):
-
 1. Open the Static Web App URL in **Safari** on your iPhone.
 2. Tap **Share** → **Add to Home Screen** → **Add**.
-3. Launch from the home-screen icon — it opens fullscreen (standalone), no browser
-   chrome, and the app shell works offline (chat still needs a connection).
+3. Launch from the home-screen icon — fullscreen, no browser chrome; the shell
+   works offline (chat needs a connection).
 
-## Provisioned Foundry environment
+## Roadmap
 
-Live resources (subscription **ai-team**, tenant *Foundry DevRel 2610*, region **eastus**):
-
-| Resource | Name |
-|----------|------|
-| Resource group | `rg-millennial-mum` |
-| Foundry account | `millennial-mum-foundry` (AIServices) |
-| Foundry project | `millennial-mum` |
-| Project endpoint | `https://millennial-mum-foundry.services.ai.azure.com/api/projects/millennial-mum` |
-| Deployments (role-named) | `triage`, `planner`, `kitchen`, `memory`, `admin-budget`, `health` |
-| App Insights | `millennial-mum-insights` (workspace-based, `millennial-mum-logs`) |
-
-`az login` + `cp .env.example .env` (already populated locally) → `python -m agents.app "..."`
-or `python server_af.py`. Data-plane roles (Cognitive Services User / Azure AI User)
-are assigned to the signing-in user. All six deployments + the full orchestrator
-route/compose flow are **verified live**.
-
-## Still to do (needs the live env / your call)
-
-- **Baseline eval** of the monolith: `python -m evals.run_eval --target baseline --azure-judges`
-  (needs `GITHUB_TOKEN` for the Copilot-SDK monolith) → `evals/results/baseline.json`.
-- **Bake-off**: eval candidate models per role (e.g. `admin-budget` DeepSeek-V3.2 vs
-  gpt-5-mini; `health` gpt-5 vs gpt-5-mini) → `evals/results/bakeoff.md`; lock winners.
-- **Deploy** the decomposed host: `azd provision` + deploy `server_af.py` via `agent-af.yaml`.
-- **Post-decomposition eval** on the decomposed target → `decomposed.json` + `comparison.md`.
-- **Claude (optional):** on a paid subscription, deploy `claude-sonnet-5` and repoint
-  `MM_HEALTH_MODEL` / `MM_ADMIN_BUDGET_MODEL`.
+- **Cut time-to-first-token** (~50–70s today): it's the blocking specialist call
+  before the orchestrator composes. Stream the specialist directly for
+  single-domain turns, or reduce orchestration hops.
+- **Entra sign-in + per-user memory** (Cosmos) so it can be shared with other mums.
+- **To-do list** in the PWA sourced from agent memory.
+- **Realtime voice** dictation.

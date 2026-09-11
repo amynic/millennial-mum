@@ -63,8 +63,8 @@ ALLOWED_ORIGIN (the SWA origin), **PYTHON_ENABLE_INIT_INDEXING=1** and
 streaming — without them the worker indexes 0 functions and every call 404s).
 CORS is handled in code (not the platform CORS list), including the OPTIONS
 preflight. Requirements: `azure-functions`, `azurefunctions-extensions-http-fastapi`,
-`httpx`. The old `millennial-mum-api` (legacy Consumption, non-streaming) is
-superseded and can be deleted.
+`httpx`. The legacy `millennial-mum-api` (Consumption, non-streaming) has been
+deleted — V2 runs entirely on `millennial-mum-api-flex`.
 
 ## Redeploy — PWA (Static Web App)
 
