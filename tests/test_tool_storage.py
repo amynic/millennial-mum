@@ -337,5 +337,55 @@ class BlobBackendTests(StorageTestCase):
         container.get_blob_client.assert_called_once_with("families/smith/list.json")
 
 
+class ReadResilienceTests(StorageTestCase):
+    """A storage outage must not take the agent down at construction time."""
+
+    class _BrokenStore:
+        def read(self, name):
+            from azure.core.exceptions import HttpResponseError
+
+            raise HttpResponseError("AuthorizationPermissionMismatch")
+
+        def write(self, name, data, *, etag):
+            raise AssertionError("should not be called")
+
+    def test_unreachable_store_falls_back_to_the_packaged_profile(self):
+        storage.set_store(self._BrokenStore())
+
+        with self.assertLogs("tools.storage", level="WARNING"):
+            document = read_json("family_profile.json", seed_from_package=True)
+
+        self.assertIsInstance(document.data, dict)
+
+    def test_unreachable_store_falls_back_to_the_default(self):
+        storage.set_store(self._BrokenStore())
+
+        with self.assertLogs("tools.storage", level="WARNING"):
+            self.assertEqual(read_json("shopping_list.json", default=[]).data, [])
+
+    def test_profile_context_survives_a_storage_outage(self):
+        from tools.memory import get_profile_context
+
+        storage.set_store(self._BrokenStore())
+
+        with self.assertLogs("tools.storage", level="WARNING"):
+            context = get_profile_context()
+
+        self.assertIsInstance(context, str)
+
+    def test_a_failed_write_still_raises(self):
+        class WriteOnlyFailure(self._BrokenStore):
+            def read(self, name):
+                return Document(data=None, etag=None)
+
+            def write(self, name, data, *, etag):
+                raise StaleWriteError("nope")
+
+        storage.set_store(WriteOnlyFailure())
+
+        with self.assertRaises(StaleWriteError):
+            update_json("list.json", lambda items: items.append("milk"), default=[], attempts=2)
+
+
 if __name__ == "__main__":
     unittest.main()

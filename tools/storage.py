@@ -21,11 +21,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional, Protocol, Tuple
+
+logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -264,8 +267,20 @@ def reset_store() -> None:
 
 
 def read_json(name: str, *, default: Any = None, seed_from_package: bool = False) -> Document:
-    """Read a document, optionally seeding from the packaged copy of the file."""
-    document = get_store().read(name)
+    """Read a document, optionally seeding from the packaged copy of the file.
+
+    Reads degrade gracefully: if the store is unreachable or the identity isn't
+    authorised, we log and fall back to the packaged/default value rather than
+    raising. Reads happen during agent construction (profile context), so a
+    storage blip must not take the whole agent down. Writes still raise — the
+    caller needs to know an update didn't land.
+    """
+    try:
+        document = get_store().read(name)
+    except Exception:  # noqa: BLE001 - never let a read break the agent
+        logger.warning("could not read %s from storage; using default", name, exc_info=True)
+        document = Document(data=None, etag=None)
+
     if document.exists:
         return document
 
