@@ -35,7 +35,7 @@ app = ResponsesAgentServerHost()
 
 # CORS: restrict to known origins in production.
 ALLOWED_ORIGINS = [
-    "https://blue-field-0a7fff90f.7.azurestaticapps.net",
+    "https://thankful-desert-05e2c3e0f.6.azurestaticapps.net",
     "http://localhost:4280",
     "http://127.0.0.1:4280",
 ]
@@ -78,8 +78,17 @@ def _extract_user_message(input_items) -> str:
 @app.response_handler
 async def handle_response(request, context, cancellation_signal):
     """Process an incoming message through the decomposed orchestrator."""
-    input_items = request.input if hasattr(request, "input") else []
-    user_message = _extract_user_message(input_items)
+    # Use the SDK's resolver — it correctly expands typed ItemMessage /
+    # input_text content from the Responses request. A hand-rolled extractor
+    # missed these shapes and fed the orchestrator empty text (triage greeted
+    # instead of routing).
+    try:
+        user_message = (await context.get_input_text()).strip()
+    except Exception:  # pragma: no cover - defensive
+        user_message = ""
+    if not user_message:
+        input_items = request.input if hasattr(request, "input") else []
+        user_message = _extract_user_message(input_items)
     logger.info("Extracted message: %s", user_message[:80])
 
     async def get_reply():

@@ -3,8 +3,11 @@ const chatForm = document.getElementById('chatForm');
 const userInput = document.getElementById('userInput');
 const sendBtn = document.getElementById('sendBtn');
 
-// API proxy endpoint — SWA managed function handles Foundry auth
-const API_ENDPOINT = '/api/chat';
+// API endpoint — standalone Azure Functions proxy that holds Foundry auth
+// server-side (client-credentials) and forwards to the hosted agent. It lives
+// off the SWA (own origin) so long multi-agent replies aren't capped by the
+// 45s Static Web Apps managed-functions gateway limit.
+const API_ENDPOINT = 'https://millennial-mum-api.azurewebsites.net/api/chat';
 
 let isProcessing = false;
 
