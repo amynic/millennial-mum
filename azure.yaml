@@ -22,6 +22,9 @@ services:
             # admin-budget) by their default names.
             FOUNDRY_PROJECT_ENDPOINT: ${FOUNDRY_PROJECT_ENDPOINT}
             APPLICATIONINSIGHTS_CONNECTION_STRING: ${APPLICATIONINSIGHTS_CONNECTION_STRING}
+            # Hosted-agent code is mounted read-only. Small JSON-backed tools
+            # use this writable runtime directory instead of the package root.
+            MM_DATA_DIR: /tmp/millennial-mum
         codeConfiguration:
             dependencyResolution: remote_build
             entryPoint: server_af.py

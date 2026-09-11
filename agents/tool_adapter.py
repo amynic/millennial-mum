@@ -14,12 +14,15 @@ monolith exposed (so eval routing/tool-accuracy comparisons stay apples-to-apple
 from __future__ import annotations
 
 import inspect
+import logging
 from functools import wraps
 
 from agent_framework import FunctionTool
 
 from tools import DOMAIN_TOOLS
 from tools._dual import TOOL_IMPLS
+
+logger = logging.getLogger(__name__)
 
 
 def _model_of(impl):
@@ -37,7 +40,11 @@ def _to_function_tool(name: str, description: str) -> FunctionTool:
     @wraps(impl)
     async def wrapper(**kwargs):
         # AF passes validated fields as kwargs; rebuild the model the impl expects.
-        return await impl(model(**kwargs))
+        try:
+            return await impl(model(**kwargs))
+        except Exception:
+            logger.exception("Tool %s failed", name)
+            raise
 
     wrapper.__name__ = name
     return FunctionTool(name=name, description=description, func=wrapper, input_model=model)

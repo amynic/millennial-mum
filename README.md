@@ -138,7 +138,9 @@ swa deploy .\frontend --deployment-token <token> --env production
 
 > Streaming gotcha: the proxy needs `PYTHON_ENABLE_INIT_INDEXING=1` **and**
 > `AzureWebJobsFeatureFlags=EnableWorkerIndexing` — without them the worker
-> indexes 0 functions and every call 404s.
+> indexes 0 functions and every call 404s. The Function App platform CORS list
+> must also include the PWA origin so browser preflight requests reach the
+> handler; see [DEPLOY.md](DEPLOY.md).
 
 ## Evaluations
 
