@@ -3,7 +3,7 @@
 import json
 from datetime import datetime
 from pydantic import BaseModel, Field
-from copilot import define_tool
+from tools._dual import define_tool
 
 
 class SuggestMealParams(BaseModel):

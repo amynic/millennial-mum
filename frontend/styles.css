@@ -38,7 +38,24 @@ body {
     text-align: center;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
+    position: relative;
 }
+
+.new-chat-btn {
+    position: absolute;
+    top: 50%;
+    right: 1rem;
+    transform: translateY(-50%);
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+    color: var(--primary);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.new-chat-btn:hover { background: var(--bg, #fff0f4); }
 
 .header h1 {
     font-size: 1.5rem;
@@ -222,3 +239,7 @@ body {
     .chat-container { padding: 1rem; }
     .input-area { padding: 0.75rem 1rem; }
 }
+
+/* iPhone safe-area insets (notch / home indicator) for installed PWA */
+body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+.input-area { padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)); }

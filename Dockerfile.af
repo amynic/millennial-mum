@@ -1,0 +1,23 @@
+# Decomposed Millennial Mum (Agent Framework) — container image for the Foundry
+# Hosted Agent / Azure Container Apps fallback path.
+#
+# NOTE: The Foundry hosting platform requires linux/amd64 images. On Apple
+# Silicon / ARM, build with:  docker build --platform linux/amd64 -t millennial-mum .
+FROM --platform=linux/amd64 python:3.13-slim
+
+WORKDIR /app
+
+# No gh CLI / Copilot SDK needed — auth is Azure identity to the Foundry project.
+COPY requirements-agents.txt .
+RUN pip install --no-cache-dir -r requirements-agents.txt
+
+# Application code
+COPY server_af.py .
+COPY agents/ ./agents/
+COPY tools/ ./tools/
+COPY family_profile.json .
+COPY shopping_list.json .
+
+EXPOSE 8088
+
+CMD ["python", "server_af.py"]

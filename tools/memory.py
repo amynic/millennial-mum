@@ -8,7 +8,7 @@ import json
 import os
 from datetime import datetime
 from pydantic import BaseModel, Field
-from copilot import define_tool
+from tools._dual import define_tool
 from typing import Optional
 
 _PROFILE_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "family_profile.json")

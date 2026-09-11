@@ -1,0 +1,14 @@
+# Decomposed Millennial Mum — Agent Framework host on Microsoft Foundry.
+# Used by server_af.py / agent-af.yaml (see requirements-hosted.txt for the
+# original Copilot-SDK monolith host).
+
+agent-framework
+agent-framework-anthropic
+azure-ai-projects>=2.3.0
+azure-identity
+azure-ai-agentserver-responses
+pydantic>=2.0
+python-dotenv
+
+# Observability → Application Insights (OpenTelemetry export)
+azure-monitor-opentelemetry-exporter

@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+requiredVersions:
+    azd: '>=1.27.1'
+    extensions:
+        azure.ai.agents: '>=1.0.0-beta.9'
+name: millennial-mum
+services:
+    ai-project:
+        host: azure.ai.project
+        endpoint: https://millennial-mum-foundry.services.ai.azure.com/api/projects/millennial-mum
+    millennial-mum:
+        project: .
+        host: azure.ai.agent
+        language: python
+        uses:
+            - ai-project
+        env:
+            # Code auth: DefaultAzureCredential -> Foundry project. The app reads
+            # the project endpoint from this var (agents/clients.py) and the six
+            # role-named deployments (triage/planner/kitchen/memory/health/
+            # admin-budget) by their default names.
+            FOUNDRY_PROJECT_ENDPOINT: ${FOUNDRY_PROJECT_ENDPOINT}
+            APPLICATIONINSIGHTS_CONNECTION_STRING: ${APPLICATIONINSIGHTS_CONNECTION_STRING}
+        codeConfiguration:
+            dependencyResolution: remote_build
+            entryPoint: server_af.py
+            runtime: python_3_13
+        container:
+            resources:
+                cpu: "1.0"
+                memory: 2Gi
+        description: |
+            Decomposed Millennial Mum: a triage orchestrator (router-as-tools) coordinating four domain specialists (Kitchen, Planner, Admin & Budget, Health) plus shared family memory, on Microsoft Agent Framework. Each specialist runs on its own Foundry role-named deployment.
+        kind: hosted
+        name: millennial-mum
+        protocols:
+            - protocol: responses
+              version: "2.0.0"

@@ -1,2 +1,16 @@
-github-copilot-sdk
+# Runtime deps for the DEPLOYED app: the decomposed Millennial Mum
+# (server_af.py) - Microsoft Agent Framework hosted on Foundry.
+# The remote build for the hosted agent installs THIS file, so it must match
+# server_af.py + agents/*. The original Copilot-SDK monolith deps are kept in
+# requirements-monolith.txt / requirements-hosted.txt.
+
+agent-framework
+agent-framework-anthropic
+azure-ai-projects>=2.3.0
+azure-identity
+azure-ai-agentserver-responses
 pydantic>=2.0
+python-dotenv
+
+# Observability -> Application Insights (OpenTelemetry export)
+azure-monitor-opentelemetry-exporter

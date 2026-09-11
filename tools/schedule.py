@@ -3,7 +3,7 @@
 import json
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
-from copilot import define_tool
+from tools._dual import define_tool
 
 # In-memory schedule store (would be a database in production)
 _schedule: list[dict] = []
