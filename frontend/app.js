@@ -130,9 +130,19 @@ async function requestReply() {
     } catch (error) {
         removeTypingIndicator(typingEl);
         const offline = !navigator.onLine || error.message === 'offline';
-        const text = offline
-            ? "📡 You're offline, so I couldn't send that. Reconnect and tap Retry."
-            : '⚠️ Sorry, something went wrong.';
+        // A fetch that rejects with TypeError never reached the server: DNS,
+        // dropped connection, or a blocked CORS preflight. That's a different
+        // problem from the server answering with an error, so say so instead of
+        // collapsing both into one vague message.
+        const unreachable = !offline && error instanceof TypeError;
+        let text;
+        if (offline) {
+            text = "📡 You're offline, so I couldn't send that. Reconnect and tap Retry.";
+        } else if (unreachable) {
+            text = "🔌 I couldn't reach the server. Check your connection and tap Retry.";
+        } else {
+            text = '⚠️ Sorry, something went wrong. Tap Retry to try again.';
+        }
         appendError(text);
         announce(text);
         console.error('Chat error:', error);

@@ -79,6 +79,29 @@ az functionapp cors add -g rg-millennial-mum -n millennial-mum-api-flex \
 az functionapp restart -g rg-millennial-mum -n millennial-mum-api-flex
 ```
 
+### Pull request preview environments
+
+Static Web Apps gives every PR its own origin, e.g. PR #18 is served from
+`https://thankful-desert-05e2c3e0f-18.eastus2.6.azurestaticapps.net`. That origin
+is *not* covered by the production entry above, so a preview loads fine but every
+chat fails with "⚠️ Sorry, something went wrong" — the browser blocks the request
+at the CORS preflight and the frontend only sees a generic network error.
+
+Azure Functions CORS has no wildcard support, so add each preview origin you want
+to test on a real device:
+
+```
+az functionapp cors add -g rg-millennial-mum -n millennial-mum-api-flex \
+  --allowed-origins https://thankful-desert-05e2c3e0f-<PR_NUMBER>.eastus2.6.azurestaticapps.net
+```
+
+Remove it again once the PR is merged:
+
+```
+az functionapp cors remove -g rg-millennial-mum -n millennial-mum-api-flex \
+  --allowed-origins https://thankful-desert-05e2c3e0f-<PR_NUMBER>.eastus2.6.azurestaticapps.net
+```
+
 The handler still returns CORS headers for POST and OPTIONS responses.
 Requirements: `azure-functions`, `azurefunctions-extensions-http-fastapi`,
 `httpx`. The legacy `millennial-mum-api` (Consumption, non-streaming) has been
