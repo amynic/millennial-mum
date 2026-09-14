@@ -85,7 +85,7 @@ def setup_observability(
             enable_sensitive_data,
         )
         return True
-    except ImportError as exc:  # pragma: no cover - depends on deployment env
+    except ImportError as exc:
         logger.error(
             "Observability is configured but the Azure Monitor exporter could not "
             "be imported (%s). Agent traces will not reach Application Insights.",
