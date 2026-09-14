@@ -2,13 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
     <title>Millennial Mum 🍼💼</title>
     <link rel="stylesheet" href="styles.css">
 
     <!-- PWA -->
     <link rel="manifest" href="manifest.webmanifest">
-    <meta name="theme-color" content="#ff6f91">
+    <meta name="theme-color" content="#ff6f91" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#14121a" media="(prefers-color-scheme: dark)">
 
     <!-- iOS: installable home-screen app -->
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -22,12 +23,18 @@
 <body>
     <div class="app">
         <header class="header">
-            <h1>🍼💼 Millennial Mum</h1>
-            <p class="subtitle">The ultimate copilot for working parents</p>
-            <button type="button" id="newChatBtn" class="new-chat-btn" title="Start a new chat">New chat</button>
+            <div class="header-text">
+                <h1>🍼💼 Millennial Mum</h1>
+                <p class="subtitle">The ultimate copilot for working parents</p>
+            </div>
+            <button type="button" id="newChatBtn" class="new-chat-btn" aria-label="Start a new chat">New chat</button>
         </header>
 
-        <main class="chat-container" id="chatContainer">
+        <div id="offlineBanner" class="offline-banner" role="status" hidden>
+            You're offline — messages won't send until you're back.
+        </div>
+
+        <main class="chat-container" id="chatContainer" role="log" aria-label="Conversation">
             <div class="message assistant">
                 <div class="message-content">
                     <p>👋 Hey! I'm <strong>Millennial Mum</strong> — your AI copilot for juggling parenting and work.</p>
@@ -42,17 +49,23 @@
             </div>
         </main>
 
+        <p id="srStatus" class="sr-only" role="status" aria-live="polite"></p>
+
         <footer class="input-area">
             <form id="chatForm" class="input-form">
-                <input
-                    type="text"
+                <label class="sr-only" for="userInput">Message Millennial Mum</label>
+                <textarea
                     id="userInput"
-                    placeholder="Ask me anything about parenting, meals, schedules..."
+                    rows="1"
+                    placeholder="Ask me anything…"
                     autocomplete="off"
-                    autofocus
-                />
-                <button type="submit" id="sendBtn" title="Send">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    autocapitalize="sentences"
+                    autocorrect="on"
+                    spellcheck="true"
+                    enterkeyhint="send"
+                ></textarea>
+                <button type="submit" id="sendBtn" aria-label="Send message">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <path d="M22 2L11 13"></path>
                         <path d="M22 2L15 22L11 13L2 9L22 2Z"></path>
                     </svg>
