@@ -64,4 +64,5 @@ class ObservabilityTests(unittest.TestCase):
             )
 
         self.assertTrue(configured)
+        exporter.assert_any_call(connection_string="InstrumentationKey=test")
         configure.assert_called_once()
