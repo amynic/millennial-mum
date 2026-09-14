@@ -115,9 +115,14 @@ az role assignment create \
 
 Data-plane RBAC takes a couple of minutes to propagate. If the identity lacks
 the role the agent still answers — reads fail soft back to defaults — but writes
-return a `HttpResponseError` and the user sees a "hiccup" message. Re-check the
-`instance_identity.principal_id` after a redeploy; if it ever rotates, the role
-assignment has to follow it (or switch to `MM_BLOB_CONNECTION_STRING`).
+return a `HttpResponseError` and the user sees a "hiccup" message. The instance
+identity is stable across redeploys (verified across versions 11→13), so the
+role assignment is a one-time step.
+
+`azd deploy` occasionally fails with `AzureDeveloperCLICredential: exit status 1`
+while resolving the agent target. This is a token hand-off between azd and the
+`azure.ai.agents` extension, not a problem with your login — `azd auth token`
+will succeed for every scope while it happens. Retry; it clears on its own.
 
 Verify after deploy — add an item, then force a fresh conversation and ask for
 the list back:
