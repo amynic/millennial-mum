@@ -3,6 +3,6 @@ pydantic>=2.0
 agent-framework
 azure-ai-agentserver-responses
 azure-identity
+azure-monitor-opentelemetry-exporter
 azure-storage-blob
 python-dotenv
-azure-monitor-opentelemetry-exporter
