@@ -2,8 +2,8 @@
 
 import builtins
 import unittest
-from unittest.mock import patch
 from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from agents import observability
 
@@ -43,8 +43,8 @@ class ObservabilityTests(unittest.TestCase):
         self.assertIn("Observability disabled", logs.output[0])
 
     def test_available_exporters_configure_tracing(self):
-        configure = unittest.mock.Mock()
-        exporter = unittest.mock.Mock(side_effect=lambda **kwargs: kwargs)
+        configure = Mock()
+        exporter = Mock(side_effect=lambda **kwargs: kwargs)
         original_import = builtins.__import__
 
         def import_telemetry_modules(name, *args, **kwargs):
