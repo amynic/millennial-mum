@@ -12,9 +12,10 @@ Design notes
 * We use the low-level ``azure-monitor-opentelemetry-exporter`` and hand the
   exporters to ``agent_framework.observability.configure_otel_providers`` so we
   don't fight AF over global provider ownership.
-* Everything is imported lazily and guarded: if the connection string is unset
-  or the exporter package isn't installed, we no-op with a warning instead of
-  crashing the app. Tracing is an operational nicety, never a hard dependency.
+* Everything is imported lazily and guarded: an unset connection string is a
+  deliberate no-op, while a missing exporter with a configured connection is
+  logged as an error without crashing the app. Tracing is an operational
+  nicety, never a hard dependency.
 
 Enable by setting ``APPLICATIONINSIGHTS_CONNECTION_STRING`` (the Foundry project's
 connected App Insights resource exposes this) before starting the app.
@@ -38,7 +39,8 @@ def setup_observability(
     """Configure OTel → Application Insights exporters for the agent app.
 
     Returns ``True`` if tracing was configured, ``False`` if it was skipped
-    (no connection string, or exporter unavailable). Safe to call more than
+    (no connection string, or exporter unavailable). A configured connection
+    with an unavailable exporter is logged as an error. Safe to call more than
     once; only the first successful call takes effect.
     """
     global _CONFIGURED
@@ -83,6 +85,13 @@ def setup_observability(
             enable_sensitive_data,
         )
         return True
+    except ImportError as exc:  # pragma: no cover - depends on deployment env
+        logger.error(
+            "Observability is configured but the Azure Monitor exporter could not "
+            "be imported (%s). Agent traces will not reach Application Insights.",
+            exc,
+        )
+        return False
     except Exception as exc:  # pragma: no cover - depends on live Azure env
         logger.warning(
             "Observability setup failed (%s). The app will run without tracing.",
