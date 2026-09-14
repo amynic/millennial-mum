@@ -47,6 +47,14 @@ azure-ai-agentserver-responses, azure-identity, …) — that's what the remote
 build installs. Responses protocol version is `2.0.0`. Env (FOUNDRY_PROJECT_
 ENDPOINT, APPLICATIONINSIGHTS_CONNECTION_STRING) is set via `azd env set`.
 
+After invoking the agent, confirm its traces reached Application Insights:
+
+```kusto
+union requests, dependencies, traces
+| where timestamp > ago(15m)
+| summarize events=count(), lastSeen=max(timestamp) by itemType
+```
+
 ## Redeploy — API proxy (Function App, Flex Consumption, streaming)
 
 The proxy is the **v2 Python model** (`api/function_app.py`) on a **Flex
