@@ -1,6 +1,6 @@
+agent-framework
 github-copilot-sdk
 pydantic>=2.0
-agent-framework
 azure-ai-agentserver-responses
 azure-identity
 azure-monitor-opentelemetry-exporter

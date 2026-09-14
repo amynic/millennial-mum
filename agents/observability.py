@@ -80,8 +80,9 @@ def setup_observability(
         from agent_framework.observability import configure_otel_providers
     except ImportError as exc:
         logger.error(
-            "Observability is configured but a required telemetry package could "
-            "not be imported (%s). Agent traces will not reach Application Insights.",
+            "Observability is configured but the Agent Framework observability "
+            "package could not be imported (%s). Agent traces will not reach "
+            "Application Insights.",
             exc,
         )
         return False
