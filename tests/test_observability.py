@@ -32,7 +32,7 @@ class ObservabilityTests(unittest.TestCase):
         self.assertFalse(configured)
         self.assertIn("traces will not reach Application Insights", logs.output[0])
 
-    def test_missing_connection_string_is_a_silent_no_op(self):
+    def test_missing_connection_string_logs_disabled_and_no_ops(self):
         with (
             patch.dict("os.environ", {}, clear=True),
             self.assertLogs(observability.logger, level="INFO") as logs,

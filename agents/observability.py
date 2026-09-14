@@ -68,8 +68,25 @@ def setup_observability(
             AzureMonitorMetricExporter,
             AzureMonitorTraceExporter,
         )
-        from agent_framework.observability import configure_otel_providers
+    except ImportError as exc:
+        logger.error(
+            "Observability is configured but the Azure Monitor exporter could not "
+            "be imported (%s). Agent traces will not reach Application Insights.",
+            exc,
+        )
+        return False
 
+    try:
+        from agent_framework.observability import configure_otel_providers
+    except ImportError as exc:
+        logger.error(
+            "Observability is configured but a required telemetry package could "
+            "not be imported (%s). Agent traces will not reach Application Insights.",
+            exc,
+        )
+        return False
+
+    try:
         exporters = [
             AzureMonitorTraceExporter(connection_string=conn),
             AzureMonitorLogExporter(connection_string=conn),
@@ -85,13 +102,6 @@ def setup_observability(
             enable_sensitive_data,
         )
         return True
-    except ImportError as exc:
-        logger.error(
-            "Observability is configured but the Azure Monitor exporter could not "
-            "be imported (%s). Agent traces will not reach Application Insights.",
-            exc,
-        )
-        return False
     except Exception as exc:  # pragma: no cover - depends on live Azure env
         logger.warning(
             "Observability setup failed (%s). The app will run without tracing.",
