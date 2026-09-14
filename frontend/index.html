@@ -27,7 +27,6 @@
                 <h1>🍼💼 Millennial Mum</h1>
                 <p class="subtitle">The ultimate copilot for working parents</p>
             </div>
-            <button type="button" id="newChatBtn" class="new-chat-btn" aria-label="Start a new chat">New chat</button>
         </header>
 
         <div id="offlineBanner" class="offline-banner" role="status" hidden>
@@ -53,6 +52,12 @@
 
         <footer class="input-area">
             <form id="chatForm" class="input-form">
+                <button type="button" id="newChatBtn" class="new-chat-btn" aria-label="Start a new chat" title="New chat">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <path d="M12 5v14"></path>
+                        <path d="M5 12h14"></path>
+                    </svg>
+                </button>
                 <label class="sr-only" for="userInput">Message Millennial Mum</label>
                 <textarea
                     id="userInput"

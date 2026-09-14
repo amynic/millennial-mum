@@ -19,6 +19,19 @@
     --safe-right: env(safe-area-inset-right, 0px);
 }
 
+/*
+ * Installed on iOS, `apple-mobile-web-app-status-bar-style: black-translucent`
+ * draws our content *underneath* the status bar. On non-notched iPhones
+ * (SE, 8) `env(safe-area-inset-top)` reports 0 even though the status bar is
+ * still overlapping, so enforce a floor that clears it. Nothing interactive
+ * lives up there any more either — "New chat" sits in the composer bar.
+ */
+@media (display-mode: standalone) {
+    :root {
+        --safe-top: max(env(safe-area-inset-top, 0px), 20px);
+    }
+}
+
 @media (prefers-color-scheme: dark) {
     :root {
         --primary: #c4b5fd;
@@ -78,34 +91,33 @@ body {
 }
 
 .header {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
     padding: 0.75rem 1rem;
     padding-top: calc(0.75rem + var(--safe-top));
+    text-align: center;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
     flex: none;
 }
 
 .header-text {
-    flex: 1;
     min-width: 0;
 }
 
+/* Lives in the composer bar, not the header: the top-right corner is both
+   where iOS parks the status bar icons and the worst place to reach. */
 .new-chat-btn {
     flex: none;
-    min-height: var(--tap);
-    min-width: var(--tap);
-    padding: 0 0.9rem;
-    font-size: 0.875rem;
-    font-family: inherit;
+    width: var(--tap);
+    height: var(--tap);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
     color: var(--primary);
     background: transparent;
     border: 1px solid var(--border);
-    border-radius: 999px;
+    border-radius: 50%;
     cursor: pointer;
-    white-space: nowrap;
     transition: background 0.15s, transform 0.1s;
 }
 
