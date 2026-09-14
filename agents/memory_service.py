@@ -9,9 +9,10 @@ into each specialist, this service exposes:
 * ``memory_tools()`` — the Agent Framework memory tools (save_*/get_family_profile),
   attached to the orchestrator so captured details persist once per turn.
 
-The store is still the monolith's ``family_profile.json`` (see tools/memory.py).
-Migrating to a Foundry-managed store / Cosmos for true multi-session, multi-user
-persistence is noted as future work in the plan.
+The store is still the monolith's ``family_profile.json`` (see tools/memory.py),
+now persisted through ``tools.storage`` to Azure Blob Storage so it survives
+container restarts and is shared across replicas. Per-family scoping (one
+profile per household rather than one per deployment) remains future work.
 """
 
 from __future__ import annotations

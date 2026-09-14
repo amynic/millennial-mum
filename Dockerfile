@@ -20,7 +20,6 @@ COPY agent_config.py .
 COPY server.py .
 COPY tools/ ./tools/
 COPY family_profile.json .
-COPY shopping_list.json .
 
 EXPOSE 8088
 

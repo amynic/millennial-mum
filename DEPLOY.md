@@ -76,6 +76,67 @@ Requirements: `azure-functions`, `azurefunctions-extensions-http-fastapi`,
 `httpx`. The legacy `millennial-mum-api` (Consumption, non-streaming) has been
 deleted — V2 runs entirely on `millennial-mum-api-flex`.
 
+## Durable tool storage (shopping list + family profile)
+
+The JSON-backed tools persist to **Azure Blob Storage**, not the container
+filesystem. The hosted agent's disk is ephemeral and per-replica, so the old
+`MM_DATA_DIR=/tmp/millennial-mum` setting meant a shopping list added in one
+conversation was gone in the next. `tools/storage.py` now writes each document
+as a blob and guards every update with the blob's ETag (`If-Match`), so two
+concurrent turns can't clobber each other.
+
+One-time setup (reuses the existing `mmumapi4095` account):
+
+```
+azd env set MM_BLOB_ACCOUNT_URL https://mmumapi4095.blob.core.windows.net
+azd env set AZURE_AI_PROJECT_ID $(az resource show -g rg-millennial-mum \
+  -n millennial-mum-foundry/millennial-mum \
+  --resource-type Microsoft.CognitiveServices/accounts/projects --query id -o tsv)
+azd deploy millennial-mum
+```
+
+The hosted agent does **not** run as the Foundry account or project managed
+identity. It runs as a per-agent *instance identity*, and that is the principal
+that needs the role. Read it off the agent definition:
+
+```
+$t = az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv
+curl -s -H "Authorization: Bearer $t" \
+  -H "Foundry-Features: CodeAgents=V1Preview,HostedAgents=V1Preview" \
+  "https://millennial-mum-foundry.services.ai.azure.com/api/projects/millennial-mum/agents/millennial-mum?api-version=v1" \
+  | jq -r .instance_identity.principal_id
+
+az role assignment create \
+  --role "Storage Blob Data Contributor" \
+  --assignee-object-id <instance-identity-principal-id> \
+  --assignee-principal-type ServicePrincipal \
+  --scope $(az storage account show -g rg-millennial-mum -n mmumapi4095 --query id -o tsv)
+```
+
+Data-plane RBAC takes a couple of minutes to propagate. If the identity lacks
+the role the agent still answers — reads fail soft back to defaults — but writes
+return a `HttpResponseError` and the user sees a "hiccup" message. The instance
+identity is stable across redeploys (verified across versions 11→13), so the
+role assignment is a one-time step.
+
+`azd deploy` occasionally fails with `AzureDeveloperCLICredential: exit status 1`
+while resolving the agent target. This is a token hand-off between azd and the
+`azure.ai.agents` extension, not a problem with your login — `azd auth token`
+will succeed for every scope while it happens. Retry; it clears on its own.
+
+Verify after deploy — add an item, then force a fresh conversation and ask for
+the list back:
+
+```
+azd ai agent invoke millennial-mum "add tomato puree to my shopping list"
+azd ai agent invoke --new-session --new-conversation "what is on my shopping list?"
+```
+
+Local dev needs nothing: with `MM_BLOB_ACCOUNT_URL` unset the tools fall back to
+a local file (`MM_DATA_DIR`, or the repo root). `MM_BLOB_PREFIX` is reserved for
+per-family blob paths once the app is multi-tenant — today every user of a
+deployment shares one list.
+
 ## Redeploy — PWA (Static Web App)
 
 ```
