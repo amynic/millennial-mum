@@ -8,6 +8,14 @@ a calm, serious register whenever Health is involved (enforced by the prompt).
 
 For evaluation we also capture which specialists were routed to and which
 underlying tools fired, via a per-run trace the router wrappers append to.
+
+Two things were added for the latency work:
+
+* every hop is timed through :mod:`agents.latency`, so a turn reports per-stage
+  durations, time to first token, and a cold/warm flag under one request id;
+* :meth:`Orchestrator.stream_traced` can take the :mod:`agents.fast_path` route,
+  streaming a single specialist straight to the parent for confidently
+  single-domain turns instead of paying two extra sequential generations.
 """
 
 from __future__ import annotations
@@ -20,6 +28,8 @@ from agent_framework import Agent, FunctionTool
 
 from agents.clients import client_for
 from agents.config import AGENT_DESCRIPTIONS, AGENT_NAMES, ORCHESTRATOR_PROMPT
+from agents.fast_path import FastPathRouter, fast_path_enabled
+from agents.latency import TurnTimer
 from agents.memory_service import memory_tools
 from agents.specialists import SPECIALIST_DOMAINS, build_specialists
 
@@ -34,6 +44,9 @@ class RunTrace:
 
     agents_used: list[str] = field(default_factory=list)
     tool_calls: list[str] = field(default_factory=list)
+    #: ``"orchestrated"`` (router-as-tools) or ``"direct"`` (fast path). Recorded
+    #: so benchmarks and traces can compare the two paths.
+    route_mode: str = "orchestrated"
 
 
 def _agent_text(response) -> str:
@@ -46,6 +59,8 @@ class Orchestrator:
     def __init__(self):
         self.specialists = build_specialists()
         self._trace = RunTrace()
+        self._fast_path = FastPathRouter()
+        self._timer: TurnTimer | None = None
         self.agent = Agent(
             client=client_for("triage"),
             name=AGENT_NAMES["triage"],
@@ -65,7 +80,12 @@ class Orchestrator:
 
         async def ask(request: str) -> str:
             self._trace.agents_used.append(domain)
-            response = await specialist.run(request)
+            timer = self._timer
+            if timer is None:
+                response = await specialist.run(request)
+            else:
+                with timer.stage("specialist_call", domain=domain):
+                    response = await specialist.run(request)
             # Best-effort tool-name capture from the specialist response.
             for name in _extract_tool_names(response):
                 self._trace.tool_calls.append(name)
@@ -79,7 +99,7 @@ class Orchestrator:
             input_model=SpecialistRequest,
         )
 
-    async def run(self, messages):
+    async def run(self, messages, *, timer: TurnTimer | None = None):
         """Run one turn; returns the composed AgentResponse.
 
         ``messages`` may be a single query string (used by the eval harness) or
@@ -87,7 +107,14 @@ class Orchestrator:
         hosted server for multi-turn context). Agent Framework accepts both.
         """
         self._trace = RunTrace()
-        return await self.agent.run(messages)
+        self._timer = timer
+        try:
+            if timer is None:
+                return await self.agent.run(messages)
+            with timer.stage("orchestrated_turn"):
+                return await self.agent.run(messages)
+        finally:
+            self._timer = None
 
     def _capture_orchestrator_tools(self, response) -> None:
         """Record the orchestrator's own tool calls (memory) into the trace.
@@ -106,39 +133,112 @@ class Orchestrator:
             self._trace.tool_calls.append(name)
             self._trace.agents_used.append("memory")
 
-    async def run_traced(self, messages) -> dict:
+    async def run_traced(self, messages, *, timer: TurnTimer | None = None) -> dict:
         """Run one turn and return text + routing/tool trace (for evals).
 
         Accepts a query string or a full ChatMessage list (see :meth:`run`).
+        Always uses the orchestrated path: the fast path is a *streaming*
+        optimisation (it exists to cut time to first token) and the eval harness
+        scores routing and safety against the full router-as-tools flow.
         """
-        response = await self.run(messages)
+        response = await self.run(messages, timer=timer)
         self._capture_orchestrator_tools(response)
         return {
             "response": _agent_text(response),
             "agents_used": list(dict.fromkeys(self._trace.agents_used)),
             "tool_calls": list(dict.fromkeys(self._trace.tool_calls)),
+            "route_mode": self._trace.route_mode,
         }
 
-    async def stream_traced(self, messages):
+    async def stream_traced(self, messages, *, timer: TurnTimer | None = None):
         """Yield the composed reply as text deltas for one turn.
 
-        Uses Agent Framework's streaming run so the hosted server can forward
-        tokens to the client as they're generated. Router tool calls fire during
-        iteration (updating the trace); the visible final reply streams as text
-        deltas. After the stream is exhausted, routing is available on
-        ``self.last_agents_used()`` for logging.
+        Takes one of two routes:
+
+        * **direct** — the fast-path classifier confidently placed the turn in a
+          single specialist domain, so that specialist streams straight to the
+          parent in the final voice. This skips the orchestrator's routing
+          generation *and* its composition generation, which together are what
+          pushed time to first token to 50-70s.
+        * **orchestrated** — everything else (multi-domain, memory-dependent,
+          health, small talk, or a classifier failure). Unchanged
+          router-as-tools behaviour: specialists answer as tools and the
+          orchestrator composes the reply.
+
+        Router tool calls fire during iteration (updating the trace); after the
+        stream is exhausted, routing is available on ``self.last_agents_used()``
+        and the chosen route on ``self.last_route_mode()``.
         """
         self._trace = RunTrace()
+        self._timer = timer
+        try:
+            domain = await self._select_fast_path(messages, timer)
+            if domain is not None:
+                async for chunk in self._stream_direct(messages, domain, timer):
+                    yield chunk
+                return
+            async for chunk in self._stream_orchestrated(messages, timer):
+                yield chunk
+        finally:
+            self._timer = None
+
+    async def _select_fast_path(self, messages, timer: TurnTimer | None) -> str | None:
+        """Classify the turn, returning a domain to stream directly, or ``None``."""
+        if not fast_path_enabled():
+            return None
+        if timer is None:
+            return await self._fast_path.classify(messages)
+        with timer.stage("route_classify") as attrs:
+            domain = await self._fast_path.classify(messages)
+            attrs["route_mode"] = "direct" if domain else "orchestrated"
+            if domain:
+                attrs["domain"] = domain
+        return domain
+
+    async def _stream_direct(self, messages, domain: str, timer: TurnTimer | None):
+        """Stream one specialist's reply straight to the parent."""
+        self._trace.route_mode = "direct"
+        self._trace.agents_used.append(domain)
+        if timer is not None:
+            timer.annotate(route_mode="direct", domain=domain)
+
+        agent = self._fast_path.direct_specialist(domain)
+        stream = agent.run(messages, stream=True)
+        async for update in stream:
+            text = getattr(update, "text", None)
+            if text:
+                if timer is not None:
+                    timer.mark_first_token()
+                yield text
+        try:
+            final = await stream.get_final_response()
+            for name in _extract_tool_names(final):
+                self._trace.tool_calls.append(name)
+        except Exception:  # pragma: no cover - trace is best-effort
+            pass
+
+    async def _stream_orchestrated(self, messages, timer: TurnTimer | None):
+        """Stream the orchestrator's composed reply (router-as-tools)."""
+        self._trace.route_mode = "orchestrated"
+        if timer is not None:
+            timer.annotate(route_mode="orchestrated")
+
         stream = self.agent.run(messages, stream=True)
         async for update in stream:
             text = getattr(update, "text", None)
             if text:
+                if timer is not None:
+                    timer.mark_first_token()
                 yield text
         try:
             final = await stream.get_final_response()
             self._capture_orchestrator_tools(final)
         except Exception:  # pragma: no cover - trace is best-effort
             pass
+
+    def last_route_mode(self) -> str:
+        """``"direct"`` or ``"orchestrated"`` for the most recent turn."""
+        return self._trace.route_mode
 
     def last_agents_used(self) -> list[str]:
         """Distinct specialists routed to on the most recent run."""

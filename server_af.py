@@ -24,6 +24,7 @@ from azure.ai.agentserver.responses import ResponsesAgentServerHost, TextRespons
 from agent_framework import Message
 from starlette.middleware.cors import CORSMiddleware
 
+from agents.latency import REQUEST_ID_HEADER, TurnTimer, extract_request_id
 from agents.observability import setup_observability
 from agents.orchestrator import get_orchestrator
 
@@ -45,8 +46,25 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_methods=["POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", REQUEST_ID_HEADER],
 )
+
+
+def _incoming_request_id(context) -> str | None:
+    """Recover the proxy's correlation id from the Responses request context.
+
+    The agent server extracts request headers prefixed ``x-client-`` into
+    ``ResponseContext.client_headers``, which is how our id crosses the Foundry
+    platform boundary. If it isn't there — an older proxy, a direct API call, or
+    a platform that dropped the header — we return ``None`` and the timer mints a
+    fresh id so the hosted-agent leg is still measurable on its own.
+    """
+    for attr in ("client_headers", "headers"):
+        headers = getattr(context, attr, None)
+        found = extract_request_id(headers)
+        if found:
+            return found
+    return None
 
 
 def _extract_user_message(input_items) -> str:
@@ -152,25 +170,49 @@ async def handle_response(request, context, cancellation_signal):
     Streams the composed reply token-by-token: when the client sends
     ``stream: true`` the SDK relays each text delta as an SSE
     ``response.output_text.delta`` event, so the PWA renders the answer as it's
-    generated instead of waiting for the full 28-80s reply.
+    generated instead of waiting for the full reply.
+
+    The turn is measured end-to-end (:class:`agents.latency.TurnTimer`) under the
+    correlation id the proxy forwarded, so per-hop durations, time to first
+    token, and the chosen route all land in Application Insights against the same
+    request id the proxy and the PWA logged.
     """
-    messages = await _build_conversation(request, context)
+    request_id = _incoming_request_id(context)
+    timer = TurnTimer("hosted_agent", request_id)
+
+    with timer.stage("build_conversation"):
+        messages = await _build_conversation(request, context)
     last_user = next(
         (m.text for m in reversed(messages) if m.role == "user" and getattr(m, "text", None)),
         "",
     )
-    logger.info("Turn: %d msgs, latest user: %s", len(messages), last_user[:80])
+    timer.annotate(turns=len(messages))
+    logger.info(
+        "Turn [%s]: %d msgs, latest user: %s", timer.request_id, len(messages), last_user[:80]
+    )
 
-    orchestrator = get_orchestrator()
+    with timer.stage("get_orchestrator"):
+        orchestrator = get_orchestrator()
 
     async def token_stream():
         try:
-            async for chunk in orchestrator.stream_traced(messages):
+            async for chunk in orchestrator.stream_traced(messages, timer=timer):
                 yield chunk
             routed = ", ".join(orchestrator.last_agents_used()) or "(none)"
-            logger.info("Routed to: %s", routed)
+            summary = timer.finish(
+                route_mode=orchestrator.last_route_mode(),
+                agent_count=len(orchestrator.last_agents_used()),
+            )
+            logger.info(
+                "Routed to: %s (%s, ttft=%sms, total=%sms)",
+                routed,
+                orchestrator.last_route_mode(),
+                summary.get("first_token_ms"),
+                summary.get("total_ms"),
+            )
         except Exception as e:  # pragma: no cover - depends on live Foundry
-            logger.error("Agent error: %s", e, exc_info=True)
+            logger.error("Agent error [%s]: %s", timer.request_id, e, exc_info=True)
+            timer.finish(failed=True)
             yield "⚠️ Something went wrong on my end. Please try again in a moment."
 
     return TextResponse(context, request, text=token_stream())

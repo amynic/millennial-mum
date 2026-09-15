@@ -151,6 +151,45 @@ Portal-tracked (Foundry → project → Evaluations): `mm-decomposed-v2-pretunin
 (routing 0.86) and `mm-decomposed-baseline-tuned` (routing 0.96, safety 1.0).
 Re-run: `python -m evals.foundry_eval --run evals/results/decomposed.json --name <name>`.
 
+## Latency — benchmark & traces
+
+Every turn is measured end-to-end under one `request_id` (see the README's
+observability section for the KQL). To reproduce a baseline against the live
+proxy:
+
+```
+# warm baseline: first request is discarded as the cold sample
+python -m evals.latency_bench --repeat 3 --out evals/results/latency_baseline.json
+
+# include the cold request in its own bucket
+python -m evals.latency_bench --repeat 3 --include-cold
+
+# one case only
+python -m evals.latency_bench --case kitchen_simple --repeat 5
+```
+
+It reports p50/p95/p99 for **time to first token** and total duration, cold and
+warm separated, plus a per-kind breakdown (single-domain, multi-domain, memory,
+tool-calling, health, hard). Only durations and reply *lengths* are recorded —
+never reply text.
+
+To compare the two routing paths, flip the fast path on the hosted agent and
+re-run the same cases:
+
+```
+azd env set MM_FAST_PATH false && azd deploy millennial-mum
+python -m evals.latency_bench --repeat 3 --out evals/results/latency_orchestrated.json
+
+azd env set MM_FAST_PATH true && azd deploy millennial-mum
+python -m evals.latency_bench --repeat 3 --out evals/results/latency_fastpath.json
+```
+
+`MM_FAST_PATH_EXCLUDE` (default `health`) pins domains to full orchestration.
+Leave Health excluded until the fast path has its own safety evaluation.
+
+Target for common single-domain turns: **warm p50 time-to-first-token under 5s,
+warm p95 under 10s.**
+
 ## Follow-ups / hardening
 
 - The Function App endpoint is anonymous (as the SWA managed function was). Add
@@ -158,8 +197,11 @@ Re-run: `python -m evals.foundry_eval --run evals/results/decomposed.json --name
   is shared beyond the owner.
 - Consider switching the proxy from an SP secret to the Function App's
   system-assigned managed identity (grant it Azure AI User) to drop the secret.
-- Streaming is live (Flex Consumption + v2 model). Next latency win: reduce
-  time-to-first-token (~50–70s) — it's dominated by the blocking specialist call
-  before the orchestrator composes. Options: stream the specialist directly for
-  single-domain turns, or cut orchestration hops.
+- Streaming is live (Flex Consumption + v2 model). Time-to-first-token is now
+  attacked by the direct-specialist fast path (`MM_FAST_PATH`, on by default):
+  confidently single-domain turns skip the orchestrator's routing and
+  composition generations. Remaining wins: run independent specialists
+  concurrently for multi-domain turns, reuse the Foundry client across
+  invocations, set minimum instances to remove proxy cold starts, and give
+  Health a fast-path safety evaluation so it can stop being excluded.
 - Tool-recall tuning (0.863 → 0.800) is the next eval target.

@@ -25,7 +25,13 @@ from agents.tool_adapter import build_domain_tools
 SPECIALIST_DOMAINS = ["kitchen", "planner", "admin_budget", "health"]
 
 
-def _instructions(domain: str) -> str:
+def specialist_instructions(domain: str) -> str:
+    """Base prompt for a domain plus the shared family-profile context.
+
+    Public because the direct-stream fast path (``agents.fast_path``) builds a
+    second, voice-owning variant of the same specialist and must start from the
+    identical instructions.
+    """
     base = SPECIALIST_PROMPTS[domain]
     ctx = profile_context()
     return base + ("\n\n" + ctx if ctx else "")
@@ -37,7 +43,7 @@ def build_specialist(domain: str) -> Agent:
         client=client_for(domain),
         name=AGENT_NAMES[domain],
         description=AGENT_DESCRIPTIONS[domain],
-        instructions=_instructions(domain),
+        instructions=specialist_instructions(domain),
         tools=build_domain_tools(domain),
     )
 

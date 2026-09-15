@@ -17,6 +17,22 @@ const HISTORY_KEY = 'mm-history-v1';
 const MAX_TURNS = 24;
 let history = loadHistory();
 
+// Per-turn correlation id. It rides in the JSON body rather than a custom
+// header on purpose: the body needs no CORS preflight allowance, so the PWA can
+// never be broken by a proxy deployment that hasn't shipped yet. The proxy
+// forwards the same id to the hosted agent, so one turn can be followed across
+// the browser, the Function proxy, and every agent hop in Application Insights.
+function newRequestId() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID().replace(/-/g, '');
+    return `${Date.now().toString(16)}${Math.random().toString(16).slice(2, 10)}`;
+}
+
+// Client-side latency for one turn. Logged, never displayed: the numbers are
+// for diagnosis, and a visible timer would only make a slow reply feel slower.
+function logTurnLatency(record) {
+    console.info('mm.latency', JSON.stringify(record));
+}
+
 let isProcessing = false;
 
 function loadHistory() {
@@ -60,21 +76,29 @@ chatForm.addEventListener('submit', async (e) => {
     setProcessing(true);
 
     const typingEl = showTypingIndicator();
+    const requestId = newRequestId();
+    const startedAt = performance.now();
+    let firstTokenMs = null;
 
     try {
         const response = await fetch(API_ENDPOINT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messages: history.slice(-MAX_TURNS) }),
+            body: JSON.stringify({
+                messages: history.slice(-MAX_TURNS),
+                request_id: requestId,
+            }),
         });
+
+        const headersMs = performance.now() - startedAt;
 
         if (!response.ok || !response.body) {
             throw new Error(`Server error: ${response.status}`);
         }
 
         // Stream the reply: append text to a single assistant bubble as chunks
-        // arrive so the answer renders progressively instead of after the full
-        // 28-80s wait.
+        // arrive so the answer renders progressively instead of waiting for the
+        // full reply.
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let reply = '';
@@ -88,6 +112,7 @@ chatForm.addEventListener('submit', async (e) => {
             if (!messageEl) {
                 removeTypingIndicator(typingEl);
                 messageEl = appendMessage('assistant', '');
+                firstTokenMs = performance.now() - startedAt;
             }
             reply += chunk;
             updateMessage(messageEl, reply);
@@ -102,9 +127,23 @@ chatForm.addEventListener('submit', async (e) => {
         }
         history.push({ role: 'assistant', content: reply });
         saveHistory();
+        logTurnLatency({
+            request_id: requestId,
+            component: 'pwa',
+            headers_ms: Math.round(headersMs),
+            first_token_ms: firstTokenMs === null ? null : Math.round(firstTokenMs),
+            total_ms: Math.round(performance.now() - startedAt),
+            chars: reply.length,
+        });
     } catch (error) {
         removeTypingIndicator(typingEl);
         appendMessage('assistant', '⚠️ Sorry, something went wrong. Please try again.');
+        logTurnLatency({
+            request_id: requestId,
+            component: 'pwa',
+            total_ms: Math.round(performance.now() - startedAt),
+            failed: true,
+        });
         console.error('Chat error:', error);
     } finally {
         setProcessing(false);

@@ -162,7 +162,7 @@ Foundry → Evaluations (`mm-decomposed-baseline-tuned`: routing **0.96**, safet
 **1.0**). Re-run after any agent change to check for regressions:
 `python -m evals.foundry_eval --run evals/results/decomposed.json --name <name>`.
 
-## Observability & per-agent cost
+## Observability, latency & per-agent cost
 
 Set `APPLICATIONINSIGHTS_CONNECTION_STRING` (from the App Insights resource linked
 to the Foundry project) and `agents/observability.py` exports OpenTelemetry traces
@@ -170,6 +170,64 @@ for every orchestrator hop and specialist/tool call. Role-named deployments give
 **per-agent cost** in the portal (Operate → Overview; Build → Agents → Monitor).
 Prompt/response content is **off** traces by default (family/health data) — opt in
 with `MM_TRACE_SENSITIVE_DATA=true`.
+
+On top of that, `agents/latency.py` measures **where the time actually goes**.
+Every turn carries one `request_id` from the PWA through the Function proxy to
+the hosted agent, so a single conversation can be followed across all three
+tiers. Each tier emits one content-free `mm.latency` JSON line (and `mm.stage` /
+`mm.turn` spans) with per-hop durations, **time to first token**, total duration,
+and a **cold/warm** flag:
+
+| Tier | Measured |
+|---|---|
+| PWA (`frontend/app.js`) | response headers, first rendered chunk, total |
+| Proxy (`api/function_app.py`) | Entra token (cache hit or fetch), upstream headers, first delta, chunk count, total |
+| Hosted agent (`server_af.py` → `agents/orchestrator.py`) | conversation build, route classification, each specialist/tool call, first token, total, chosen route |
+
+Find one slow turn in App Insights with:
+
+```kusto
+traces
+| where message startswith "mm.latency"
+| extend d = parse_json(substring(message, 11))
+| project timestamp, request_id=tostring(d.request_id), component=tostring(d.component),
+          cold=tobool(d.cold), route=tostring(d.route_mode),
+          ttft_ms=todouble(d.first_token_ms), total_ms=todouble(d.total_ms), stages=d.stages
+| order by ttft_ms desc
+```
+
+Reproduce a baseline (p50/p95/p99, cold and warm separated) with
+`python -m evals.latency_bench --repeat 3 --out evals/results/latency_baseline.json`.
+
+## Reducing time-to-first-token — the direct-specialist fast path
+
+The router-as-tools flow makes the parent wait for **three** sequential model
+generations before a single character appears: the orchestrator picks a
+specialist, the specialist generates its *whole* answer (nothing streams while
+the orchestrator is blocked on that tool result), and only then does the
+orchestrator regenerate it in voice — that third generation is what streams.
+That serialisation is the 50–70s time-to-first-token.
+
+`agents/fast_path.py` removes two of the three for turns that are confidently a
+**single** domain: a cheap one-label classifier picks the domain (a handful of
+output tokens), then that specialist streams straight to the parent, owning the
+final voice via `DIRECT_REPLY_PROMPT`.
+
+Anything else falls back to the untouched orchestrated path — multi-domain,
+memory-dependent, small talk, an unparseable label, or a classifier error. The
+fallback is always the previously shipped behaviour.
+
+| Env var | Default | Purpose |
+|---|---|---|
+| `MM_FAST_PATH` | `true` | Master switch. Set `false` for a like-for-like baseline run. |
+| `MM_FAST_PATH_EXCLUDE` | `health` | Domains pinned to full orchestration. |
+
+**Health stays orchestrated by default.** It is the safety-critical domain with
+the hardened NHS-only prompt and an evaluated safety score of 1.0; it keeps the
+full flow until the fast path has its own safety evaluation.
+
+The eval harness (`run_traced`) deliberately always uses the orchestrated path,
+so routing and safety scores stay comparable to the existing baseline.
 
 ## Install on iPhone (PWA)
 
@@ -180,9 +238,10 @@ with `MM_TRACE_SENSITIVE_DATA=true`.
 
 ## Roadmap
 
-- **Cut time-to-first-token** (~50–70s today): it's the blocking specialist call
-  before the orchestrator composes. Stream the specialist directly for
-  single-domain turns, or reduce orchestration hops.
+- **Cut time-to-first-token**: the direct-specialist fast path is in (see above).
+  Next: measure it against the recorded baseline, then extend to multi-domain
+  turns by running independent specialists concurrently, and add a fast-path
+  safety evaluation so Health can join it.
 - **Entra sign-in + per-user memory** (Cosmos) so it can be shared with other mums.
 - **To-do list** in the PWA sourced from agent memory.
 - **Realtime voice** dictation.
