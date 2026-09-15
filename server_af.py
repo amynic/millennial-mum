@@ -25,7 +25,7 @@ from agent_framework import Message
 from starlette.middleware.cors import CORSMiddleware
 
 from agents.latency import REQUEST_ID_HEADER, TurnTimer, extract_request_id
-from agents.observability import setup_observability
+from agents.observability import flush_telemetry, setup_observability
 from agents.orchestrator import get_orchestrator
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -214,6 +214,10 @@ async def handle_response(request, context, cancellation_signal):
             logger.error("Agent error [%s]: %s", timer.request_id, e, exc_info=True)
             timer.finish(failed=True)
             yield "⚠️ Something went wrong on my end. Please try again in a moment."
+        finally:
+            # The runtime stops this container as soon as the turn ends, which is
+            # sooner than OTel's batch processors would export on their own.
+            flush_telemetry()
 
     return TextResponse(context, request, text=token_stream())
 

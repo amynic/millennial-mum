@@ -1,0 +1,307 @@
+{
+  "endpoint": "https://millennial-mum-api-flex.azurewebsites.net/api/chat",
+  "started_at": "2026-09-15T14:36:49Z",
+  "repeat": 1,
+  "summary": {
+    "cold": {
+      "requests": 1,
+      "succeeded": 1,
+      "first_token_ms": {
+        "n": 1,
+        "p50": 19218.5,
+        "p95": 19218.5,
+        "p99": 19218.5,
+        "min": 19218.5,
+        "max": 19218.5,
+        "mean": 19218.5
+      },
+      "total_ms": {
+        "n": 1,
+        "p50": 19992.7,
+        "p95": 19992.7,
+        "p99": 19992.7,
+        "min": 19992.7,
+        "max": 19992.7,
+        "mean": 19992.7
+      }
+    },
+    "warm": {
+      "requests": 9,
+      "succeeded": 9,
+      "first_token_ms": {
+        "n": 9,
+        "p50": 19252.1,
+        "p95": 36634.7,
+        "p99": 36634.7,
+        "min": 15616.5,
+        "max": 36634.7,
+        "mean": 23374.2
+      },
+      "total_ms": {
+        "n": 9,
+        "p50": 20257.2,
+        "p95": 41066.6,
+        "p99": 41066.6,
+        "min": 18101.6,
+        "max": 41066.6,
+        "mean": 26137.3
+      }
+    },
+    "warm_by_kind": {
+      "hard": {
+        "requests": 1,
+        "succeeded": 1,
+        "first_token_ms": {
+          "n": 1,
+          "p50": 31499.1,
+          "p95": 31499.1,
+          "p99": 31499.1,
+          "min": 31499.1,
+          "max": 31499.1,
+          "mean": 31499.1
+        },
+        "total_ms": {
+          "n": 1,
+          "p50": 34312.1,
+          "p95": 34312.1,
+          "p99": 34312.1,
+          "min": 34312.1,
+          "max": 34312.1,
+          "mean": 34312.1
+        }
+      },
+      "health": {
+        "requests": 1,
+        "succeeded": 1,
+        "first_token_ms": {
+          "n": 1,
+          "p50": 36634.7,
+          "p95": 36634.7,
+          "p99": 36634.7,
+          "min": 36634.7,
+          "max": 36634.7,
+          "mean": 36634.7
+        },
+        "total_ms": {
+          "n": 1,
+          "p50": 41066.6,
+          "p95": 41066.6,
+          "p99": 41066.6,
+          "min": 41066.6,
+          "max": 41066.6,
+          "mean": 41066.6
+        }
+      },
+      "memory": {
+        "requests": 1,
+        "succeeded": 1,
+        "first_token_ms": {
+          "n": 1,
+          "p50": 23077.8,
+          "p95": 23077.8,
+          "p99": 23077.8,
+          "min": 23077.8,
+          "max": 23077.8,
+          "mean": 23077.8
+        },
+        "total_ms": {
+          "n": 1,
+          "p50": 25597.7,
+          "p95": 25597.7,
+          "p99": 25597.7,
+          "min": 25597.7,
+          "max": 25597.7,
+          "mean": 25597.7
+        }
+      },
+      "multi_domain": {
+        "requests": 1,
+        "succeeded": 1,
+        "first_token_ms": {
+          "n": 1,
+          "p50": 33576.3,
+          "p95": 33576.3,
+          "p99": 33576.3,
+          "min": 33576.3,
+          "max": 33576.3,
+          "mean": 33576.3
+        },
+        "total_ms": {
+          "n": 1,
+          "p50": 38757.5,
+          "p95": 38757.5,
+          "p99": 38757.5,
+          "min": 38757.5,
+          "max": 38757.5,
+          "mean": 38757.5
+        }
+      },
+      "single_domain": {
+        "requests": 3,
+        "succeeded": 3,
+        "first_token_ms": {
+          "n": 3,
+          "p50": 16431.6,
+          "p95": 17022.8,
+          "p99": 17022.8,
+          "min": 15616.5,
+          "max": 17022.8,
+          "mean": 16357.0
+        },
+        "total_ms": {
+          "n": 3,
+          "p50": 19211.6,
+          "p95": 19604.0,
+          "p99": 19604.0,
+          "min": 18327.7,
+          "max": 19604.0,
+          "mean": 19047.8
+        }
+      },
+      "tool_calling": {
+        "requests": 2,
+        "succeeded": 2,
+        "first_token_ms": {
+          "n": 2,
+          "p50": 17257.3,
+          "p95": 19252.1,
+          "p99": 19252.1,
+          "min": 17257.3,
+          "max": 19252.1,
+          "mean": 18254.7
+        },
+        "total_ms": {
+          "n": 2,
+          "p50": 18101.6,
+          "p95": 20257.2,
+          "p99": 20257.2,
+          "min": 18101.6,
+          "max": 20257.2,
+          "mean": 19179.4
+        }
+      }
+    }
+  },
+  "measurements": [
+    {
+      "case": "greeting",
+      "kind": "easy",
+      "request_id": "b5ea853f45c34f9693c38006435eeb7e",
+      "cold": true,
+      "status": 200,
+      "headers_ms": 19218.1,
+      "first_token_ms": 19218.5,
+      "total_ms": 19992.7,
+      "chars": 97,
+      "error": null
+    },
+    {
+      "case": "kitchen_simple",
+      "kind": "single_domain",
+      "request_id": "96807304356242f68d9f7de565e34b12",
+      "cold": false,
+      "status": 200,
+      "headers_ms": 15616.0,
+      "first_token_ms": 15616.5,
+      "total_ms": 19211.6,
+      "chars": 1356,
+      "error": null
+    },
+    {
+      "case": "kitchen_tool",
+      "kind": "tool_calling",
+      "request_id": "299b3ec5b3b04c0a8d9915cc1d5cd0fc",
+      "cold": false,
+      "status": 200,
+      "headers_ms": 17257.1,
+      "first_token_ms": 17257.3,
+      "total_ms": 18101.6,
+      "chars": 193,
+      "error": null
+    },
+    {
+      "case": "planner_simple",
+      "kind": "single_domain",
+      "request_id": "4647e3eda3ec42c596bd4f23512d6958",
+      "cold": false,
+      "status": 200,
+      "headers_ms": 16431.2,
+      "first_token_ms": 16431.6,
+      "total_ms": 18327.7,
+      "chars": 602,
+      "error": null
+    },
+    {
+      "case": "planner_tool",
+      "kind": "tool_calling",
+      "request_id": "4295647b68424597a50138620c89b4ea",
+      "cold": false,
+      "status": 200,
+      "headers_ms": 19251.7,
+      "first_token_ms": 19252.1,
+      "total_ms": 20257.2,
+      "chars": 300,
+      "error": null
+    },
+    {
+      "case": "admin_budget_simple",
+      "kind": "single_domain",
+      "request_id": "b700208c728a46fb905bfd6edf5a8513",
+      "cold": false,
+      "status": 200,
+      "headers_ms": 17022.5,
+      "first_token_ms": 17022.8,
+      "total_ms": 19604.0,
+      "chars": 677,
+      "error": null
+    },
+    {
+      "case": "health_simple",
+      "kind": "health",
+      "request_id": "5b320b30eadb491bbc88949e398a125f",
+      "cold": false,
+      "status": 200,
+      "headers_ms": 36634.4,
+      "first_token_ms": 36634.7,
+      "total_ms": 41066.6,
+      "chars": 1803,
+      "error": null
+    },
+    {
+      "case": "multi_domain",
+      "kind": "multi_domain",
+      "request_id": "602438dcca3241dcae149c4fb71f4556",
+      "cold": false,
+      "status": 200,
+      "headers_ms": 33576.0,
+      "first_token_ms": 33576.3,
+      "total_ms": 38757.5,
+      "chars": 2294,
+      "error": null
+    },
+    {
+      "case": "memory",
+      "kind": "memory",
+      "request_id": "f83153c843074bad81b7462ba8f06531",
+      "cold": false,
+      "status": 200,
+      "headers_ms": 23077.5,
+      "first_token_ms": 23077.8,
+      "total_ms": 25597.7,
+      "chars": 720,
+      "error": null
+    },
+    {
+      "case": "hard_reasoning",
+      "kind": "hard",
+      "request_id": "fceea091a9284c518e4f1b1c6a44b624",
+      "cold": false,
+      "status": 200,
+      "headers_ms": 31498.9,
+      "first_token_ms": 31499.1,
+      "total_ms": 34312.1,
+      "chars": 1249,
+      "error": null
+    }
+  ]
+}

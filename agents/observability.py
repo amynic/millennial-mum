@@ -53,6 +53,21 @@ def setup_observability(
         )
         return False
 
+    # On the Foundry hosted runtime the platform configures Azure Monitor itself
+    # (microsoft-opentelemetry distro) from this same connection string, but it
+    # runs *after* app import. Whoever sets the global providers first wins, and
+    # OTel refuses any later override -- so configuring them here silently
+    # disabled the platform's exporter and the app shipped no telemetry at all.
+    # Defer to the platform when hosted; our spans/logs flow through its
+    # exporter, which is already pointed at the right resource.
+    if os.getenv("FOUNDRY_HOSTING_ENVIRONMENT"):
+        _CONFIGURED = True
+        logger.info(
+            "Observability delegated to the Foundry hosted runtime; not claiming "
+            "the global OTel providers (doing so would suppress its exporter)."
+        )
+        return True
+
     # Whether to record prompt/response content on spans. Default off — toddler
     # health chats and family data shouldn't land in telemetry unless opted in.
     if enable_sensitive_data is None:
@@ -89,3 +104,38 @@ def setup_observability(
             exc,
         )
         return False
+
+
+def flush_telemetry(timeout_ms: int = 5_000) -> bool:
+    """Force-export buffered spans and logs before the container can be frozen.
+
+    The hosted agent runtime provisions a container per request and stops it as
+    soon as the response completes. OTel's batch processors export on a timer
+    (several seconds by default), so without an explicit flush the process is
+    gone before anything is sent — which is why this app appeared to emit no
+    telemetry at all despite being configured correctly.
+
+    Returns ``True`` if every provider flushed cleanly. Never raises: telemetry
+    must not be able to fail a user's turn.
+    """
+    if not _CONFIGURED:
+        return False
+
+    ok = True
+    try:
+        from opentelemetry import trace
+        from opentelemetry._logs import get_logger_provider
+
+        for provider in (trace.get_tracer_provider(), get_logger_provider()):
+            force_flush = getattr(provider, "force_flush", None)
+            if force_flush is None:
+                continue
+            try:
+                ok = bool(force_flush(timeout_ms)) and ok
+            except Exception as exc:  # pragma: no cover - exporter/network dependent
+                logger.debug("Telemetry flush failed for %s: %s", type(provider).__name__, exc)
+                ok = False
+    except Exception as exc:  # pragma: no cover - OTel not installed
+        logger.debug("Telemetry flush skipped (%s).", exc)
+        return False
+    return ok
