@@ -21,9 +21,46 @@ class ModelSpec:
     #                OpenAI-compatible inference endpoint (GPT-5 family + DeepSeek).
     model: str  # Foundry *deployment* name (role-named, not model-named)
     env_var: str  # env var that overrides the deployment name
+    #: Reasoning budget spent before the first visible token. ``None`` means "send
+    #: nothing and let the model decide". This is the single biggest lever on
+    #: time-to-first-token: measured on this project's deployments, dropping the
+    #: GPT-5 default to ``minimal`` took the Kitchen specialist from 17.9s to 2.8s
+    #: and Health from 30.3s to 3.7s.
+    reasoning_effort: str | None = None
+    #: Per-role override, e.g. ``MM_HEALTH_REASONING_EFFORT=medium``.
+    effort_env_var: str | None = None
+    #: Whether the underlying model understands the reasoning parameter at all.
+    #: DeepSeek-V3.2 rejects the request outright, so no override — including the
+    #: global ``MM_REASONING_EFFORT`` — may switch it on.
+    supports_reasoning: bool = True
 
     def deployment(self) -> str:
         return os.getenv(self.env_var, self.model)
+
+    def effort(self) -> str | None:
+        """Resolved reasoning effort, or ``None`` to omit the parameter.
+
+        Precedence: per-role env var, then the global ``MM_REASONING_EFFORT``,
+        then the built-in default. The literal ``default`` means "send nothing
+        and let the model decide", which is how you get the old behaviour back
+        without editing code.
+        """
+        if not self.supports_reasoning:
+            return None
+        raw = None
+        if self.effort_env_var:
+            raw = os.getenv(self.effort_env_var)
+        if raw is None or not raw.strip():
+            raw = os.getenv("MM_REASONING_EFFORT")
+        if raw is None or not raw.strip():
+            return self.reasoning_effort
+        value = raw.strip().lower()
+        return None if value in ("default", "none", "off") else value
+
+    def default_options(self) -> dict:
+        """Options for the Agent constructor. Empty when reasoning is not applicable."""
+        effort = self.effort()
+        return {"reasoning": {"effort": effort}} if effort else {}
 
 
 # Agent -> deployment. Deployments are named by ROLE (not model) so per-agent
@@ -45,12 +82,26 @@ class ModelSpec:
 # internal/sandbox subscription. Swap by pointing MM_HEALTH_MODEL /
 # MM_ADMIN_BUDGET_MODEL at a `claude-sonnet-5` deployment on a paid subscription.
 AGENT_MODELS: dict[str, ModelSpec] = {
-    "triage": ModelSpec("foundry", "triage", "MM_TRIAGE_MODEL"),
-    "kitchen": ModelSpec("foundry", "kitchen", "MM_KITCHEN_MODEL"),
-    "planner": ModelSpec("foundry", "planner", "MM_PLANNER_MODEL"),
-    "admin_budget": ModelSpec("foundry", "admin-budget", "MM_ADMIN_BUDGET_MODEL"),
-    "health": ModelSpec("foundry", "health", "MM_HEALTH_MODEL"),
-    "memory": ModelSpec("foundry", "memory", "MM_MEMORY_MODEL"),
+    # Routing and composition are mechanical: pick a label, or restate a
+    # specialist's answer in voice. Neither benefits from a reasoning budget.
+    "triage": ModelSpec("foundry", "triage", "MM_TRIAGE_MODEL", "minimal", "MM_TRIAGE_REASONING_EFFORT"),
+    "kitchen": ModelSpec("foundry", "kitchen", "MM_KITCHEN_MODEL", "minimal", "MM_KITCHEN_REASONING_EFFORT"),
+    "planner": ModelSpec("foundry", "planner", "MM_PLANNER_MODEL", "minimal", "MM_PLANNER_REASONING_EFFORT"),
+    # DeepSeek-V3.2 is not a reasoning model and rejects the parameter outright.
+    "admin_budget": ModelSpec(
+        "foundry",
+        "admin-budget",
+        "MM_ADMIN_BUDGET_MODEL",
+        None,
+        "MM_ADMIN_BUDGET_REASONING_EFFORT",
+        supports_reasoning=False,
+    ),
+    # Health keeps a real reasoning budget. It is the safety-critical domain with
+    # an evaluated safety score of 1.0, so it gets `low` rather than `minimal`:
+    # still ~3x faster than the default, without stripping deliberation from the
+    # one agent whose mistakes matter most. Raise it if the safety eval moves.
+    "health": ModelSpec("foundry", "health", "MM_HEALTH_MODEL", "low", "MM_HEALTH_REASONING_EFFORT"),
+    "memory": ModelSpec("foundry", "memory", "MM_MEMORY_MODEL", "minimal", "MM_MEMORY_REASONING_EFFORT"),
 }
 
 # Human-facing agent names (also used for per-agent cost attribution in Foundry).

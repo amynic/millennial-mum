@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 
 from agent_framework import Agent, FunctionTool
 
-from agents.clients import client_for
+from agents.clients import client_for, options_for
 from agents.config import AGENT_DESCRIPTIONS, AGENT_NAMES, ORCHESTRATOR_PROMPT
 from agents.fast_path import FastPathRouter, fast_path_enabled
 from agents.latency import TurnTimer
@@ -67,6 +67,7 @@ class Orchestrator:
             description="Triage orchestrator that routes to specialists and composes the reply.",
             instructions=ORCHESTRATOR_PROMPT,
             tools=self._router_tools() + memory_tools(),
+            default_options=options_for("triage"),
         )
 
     def _router_tools(self) -> list[FunctionTool]:

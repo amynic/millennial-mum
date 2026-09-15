@@ -57,3 +57,13 @@ def make_client(spec: ModelSpec):
 
 def client_for(domain: str):
     return make_client(AGENT_MODELS[domain])
+
+
+def options_for(domain: str) -> dict:
+    """Default Agent options for a domain (currently the reasoning budget).
+
+    Kept beside ``client_for`` so every place that builds an agent picks up the
+    same settings; a specialist built without these silently reverts to the
+    model default, which is where almost all of the time-to-first-token went.
+    """
+    return AGENT_MODELS[domain].default_options()

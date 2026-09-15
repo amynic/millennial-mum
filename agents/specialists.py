@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from agent_framework import Agent
 
-from agents.clients import client_for
+from agents.clients import client_for, options_for
 from agents.config import (
     AGENT_DESCRIPTIONS,
     AGENT_NAMES,
@@ -45,6 +45,7 @@ def build_specialist(domain: str) -> Agent:
         description=AGENT_DESCRIPTIONS[domain],
         instructions=specialist_instructions(domain),
         tools=build_domain_tools(domain),
+        default_options=options_for(domain),
     )
 
 

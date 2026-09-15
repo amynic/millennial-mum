@@ -43,7 +43,7 @@ import os
 
 from agent_framework import Agent
 
-from agents.clients import client_for
+from agents.clients import client_for, options_for
 from agents.config import (
     AGENT_DESCRIPTIONS,
     AGENT_NAMES,
@@ -179,6 +179,7 @@ class FastPathRouter:
                 name="Route Classifier",
                 description="Classifies a turn into a single specialist domain, or defers.",
                 instructions=ROUTER_PROMPT,
+                default_options=options_for("triage"),
             )
         return self._classifier
 
@@ -191,6 +192,7 @@ class FastPathRouter:
                 description=AGENT_DESCRIPTIONS[domain],
                 instructions=specialist_instructions(domain) + DIRECT_REPLY_PROMPT,
                 tools=_domain_tools(domain),
+                default_options=options_for(domain),
             )
         return self._direct[domain]
 
