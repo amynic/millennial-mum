@@ -184,11 +184,46 @@ azd env set MM_FAST_PATH true && azd deploy millennial-mum
 python -m evals.latency_bench --repeat 3 --out evals/results/latency_fastpath.json
 ```
 
+Then diff the two runs and check them against the target:
+
+```
+python -m evals.latency_compare \
+    evals/results/latency_orchestrated.json \
+    evals/results/latency_fastpath.json
+```
+
+`MM_FAST_PATH` and `MM_FAST_PATH_EXCLUDE` only reach the container because
+they are listed in `azure.yaml`'s `env:` block — **only the variables named
+there are passed to the hosted agent**, so adding a new one to the azd env
+without also adding it to `azure.yaml` silently does nothing.
+
 `MM_FAST_PATH_EXCLUDE` (default `health`) pins domains to full orchestration.
-Leave Health excluded until the fast path has its own safety evaluation.
+A blank value means "unset" and keeps the default, because azd substitutes an
+empty string for a variable nobody set — use the literal `none` to clear the
+list. Leave Health excluded until the fast path has its own safety evaluation.
 
 Target for common single-domain turns: **warm p50 time-to-first-token under 5s,
 warm p95 under 10s.**
+
+### Which azd environment deploys the agent
+
+The live agent version was deployed from the **`mm-prod`** azd environment,
+which lives in the `amynic-automatic-system` worktree — not in the main
+checkout, and not in this one. It is the only environment with
+`MM_BLOB_ACCOUNT_URL` set, so deploying from any of the other envs
+(`millennial-mum`, `amynic-fluffy-winner`) would drop that variable and break
+the shopping list and family profile tools.
+
+Check before deploying:
+
+```
+azd env list                       # nothing here means no .azure/ in this tree
+azd env get-values | Select-String MM_BLOB_ACCOUNT_URL
+```
+
+The agent endpoint routes **100% of traffic to `@latest`**, so a deploy takes
+effect immediately for the live PWA — there is no canary step. Take the
+orchestrated baseline before deploying a build that has the fast path on.
 
 ## Follow-ups / hardening
 

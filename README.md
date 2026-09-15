@@ -220,7 +220,11 @@ fallback is always the previously shipped behaviour.
 | Env var | Default | Purpose |
 |---|---|---|
 | `MM_FAST_PATH` | `true` | Master switch. Set `false` for a like-for-like baseline run. |
-| `MM_FAST_PATH_EXCLUDE` | `health` | Domains pinned to full orchestration. |
+| `MM_FAST_PATH_EXCLUDE` | `health` | Domains pinned to full orchestration. Blank means "unset" (keeps the default); use `none` to clear. |
+
+Both are mapped through `azure.yaml`'s `env:` block. Only variables named there
+reach the hosted container, so setting one in the azd environment alone has no
+effect.
 
 **Health stays orchestrated by default.** It is the safety-critical domain with
 the hardened NHS-only prompt and an evaluated safety score of 1.0; it keeps the

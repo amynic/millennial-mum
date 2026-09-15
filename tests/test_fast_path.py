@@ -14,7 +14,13 @@ from unittest import mock
 
 from agents import fast_path
 from agents.config import DIRECT_REPLY_PROMPT, VOICE_RULES
-from agents.fast_path import fast_path_enabled, parse_route_label, router_input
+from agents.fast_path import (
+    DEFAULT_EXCLUDED_DOMAINS,
+    excluded_domains,
+    fast_path_enabled,
+    parse_route_label,
+    router_input,
+)
 from agents.orchestrator import Orchestrator, RunTrace
 
 
@@ -40,8 +46,22 @@ class ParseRouteLabelTests(unittest.TestCase):
         self.assertIsNone(parse_route_label("health"))
 
     def test_health_can_be_opted_in_explicitly(self):
-        with mock.patch.dict(os.environ, {"MM_FAST_PATH_EXCLUDE": ""}):
+        with mock.patch.dict(os.environ, {"MM_FAST_PATH_EXCLUDE": "none"}):
             self.assertEqual(parse_route_label("health"), "health")
+
+    def test_blank_exclude_list_still_protects_health(self):
+        # azure.yaml substitutes an empty string for an unset azd variable. Blank
+        # must mean "unset", never "exclude nothing" - otherwise a forgotten
+        # `azd env set` silently puts the safety-critical domain on the fast path.
+        for blank in ("", "   "):
+            with mock.patch.dict(os.environ, {"MM_FAST_PATH_EXCLUDE": blank}):
+                self.assertEqual(excluded_domains(), frozenset(DEFAULT_EXCLUDED_DOMAINS))
+                self.assertIsNone(parse_route_label("health"), repr(blank))
+
+    def test_exclude_list_is_case_insensitive(self):
+        with mock.patch.dict(os.environ, {"MM_FAST_PATH_EXCLUDE": "Health, Kitchen"}):
+            self.assertEqual(excluded_domains(), frozenset({"health", "kitchen"}))
+            self.assertIsNone(parse_route_label("kitchen"))
 
     def test_unknown_or_chatty_answers_fall_back(self):
         for raw in (None, "", "   ", "cooking", "I think this is a kitchen question", "a" * 40):
@@ -80,6 +100,12 @@ class FastPathToggleTests(unittest.TestCase):
     def test_can_be_switched_off_for_a_baseline_run(self):
         with mock.patch.dict(os.environ, {"MM_FAST_PATH": "false"}):
             self.assertFalse(fast_path_enabled())
+
+    def test_blank_value_keeps_the_default(self):
+        # An unset azd variable arrives as "", which must not read as false.
+        for blank in ("", "   "):
+            with mock.patch.dict(os.environ, {"MM_FAST_PATH": blank}):
+                self.assertTrue(fast_path_enabled(), repr(blank))
 
 
 class DirectReplyPromptTests(unittest.TestCase):

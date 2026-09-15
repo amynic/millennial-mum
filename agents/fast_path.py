@@ -77,11 +77,20 @@ def fast_path_enabled() -> bool:
 
 
 def excluded_domains() -> frozenset[str]:
-    """Domains that must always use full orchestration (``MM_FAST_PATH_EXCLUDE``)."""
+    """Domains that must always use full orchestration (``MM_FAST_PATH_EXCLUDE``).
+
+    A blank value means "unset", not "exclude nothing". ``azure.yaml`` substitutes
+    an empty string for an azd variable that was never set, so treating blank as
+    an explicit empty list would silently drop Health onto the fast path — the
+    one domain that must not go there by accident. Clearing the list is possible,
+    but it has to be deliberate: set the value to ``none``.
+    """
     raw = os.getenv("MM_FAST_PATH_EXCLUDE")
-    if raw is None:
+    if raw is None or not raw.strip():
         return frozenset(DEFAULT_EXCLUDED_DOMAINS)
-    return frozenset(part.strip() for part in raw.split(",") if part.strip())
+    if raw.strip().lower() == "none":
+        return frozenset()
+    return frozenset(part.strip().lower() for part in raw.split(",") if part.strip())
 
 
 def parse_route_label(text: str | None) -> str | None:

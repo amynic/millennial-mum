@@ -306,8 +306,14 @@ def extract_request_id(headers: Any) -> str | None:
 
 
 def env_flag(name: str, default: bool) -> bool:
-    """Read a boolean environment variable with a sane default."""
+    """Read a boolean environment variable with a sane default.
+
+    A blank value counts as unset. Deployment templates routinely substitute an
+    empty string for a variable nobody set (``azure.yaml`` does exactly this), and
+    reading that as ``false`` would silently disable a feature that is supposed to
+    be on by default.
+    """
     raw = os.getenv(name)
-    if raw is None:
+    if raw is None or not raw.strip():
         return default
     return raw.strip().lower() in ("1", "true", "yes", "on")

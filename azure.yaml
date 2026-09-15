@@ -28,6 +28,13 @@ services:
             # conversations. Auth is managed identity via DefaultAzureCredential.
             MM_BLOB_ACCOUNT_URL: ${MM_BLOB_ACCOUNT_URL}
             MM_BLOB_CONTAINER: millennial-mum
+            # Direct-specialist fast path. Without these two lines `azd env set
+            # MM_FAST_PATH ...` has no effect at all: only the variables named
+            # here are passed to the hosted container. Both default safely when
+            # the azd variable is unset (azd substitutes an empty string, which
+            # the app reads as "unset" rather than as false/empty).
+            MM_FAST_PATH: ${MM_FAST_PATH}
+            MM_FAST_PATH_EXCLUDE: ${MM_FAST_PATH_EXCLUDE}
         codeConfiguration:
             dependencyResolution: remote_build
             entryPoint: server_af.py
