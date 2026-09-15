@@ -3,6 +3,9 @@ const chatForm = document.getElementById('chatForm');
 const userInput = document.getElementById('userInput');
 const sendBtn = document.getElementById('sendBtn');
 const newChatBtn = document.getElementById('newChatBtn');
+const offlineBanner = document.getElementById('offlineBanner');
+const srStatus = document.getElementById('srStatus');
+const appEl = document.querySelector('.app');
 
 // API endpoint — standalone Azure Functions proxy that holds Foundry auth
 // server-side (client-credentials) and forwards to the hosted agent. It lives
@@ -14,6 +17,9 @@ const API_ENDPOINT = 'https://millennial-mum-api-flex.azurewebsites.net/api/chat
 // history and sends it on every turn; persisted so closing/reopening the
 // installed PWA keeps the conversation.
 const HISTORY_KEY = 'mm-history-v1';
+// The composer draft survives the app being backgrounded mid-sentence, which
+// on a phone happens constantly.
+const DRAFT_KEY = 'mm-draft-v1';
 const MAX_TURNS = 24;
 let history = loadHistory();
 
@@ -57,11 +63,29 @@ chatForm.addEventListener('submit', async (e) => {
     history.push({ role: 'user', content: message });
     saveHistory();
     userInput.value = '';
+    clearDraft();
+    autoGrow();
+
+    await requestReply();
+});
+
+// Sends the current history and streams the reply in. Split out from the submit
+// handler so a failed turn can be retried without re-typing or duplicating the
+// user's message (it's already in `history`).
+async function requestReply() {
+    // The textarea is disabled while we wait, which drops focus to <body>, so
+    // remember whether the keyboard should come back afterwards.
+    const keepFocus = document.activeElement === userInput || document.activeElement === sendBtn;
     setProcessing(true);
+    announce('Sending…');
 
     const typingEl = showTypingIndicator();
 
     try {
+        if (!navigator.onLine) {
+            throw new Error('offline');
+        }
+
         const response = await fetch(API_ENDPOINT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -102,27 +126,46 @@ chatForm.addEventListener('submit', async (e) => {
         }
         history.push({ role: 'assistant', content: reply });
         saveHistory();
+        announce(reply);
     } catch (error) {
         removeTypingIndicator(typingEl);
-        appendMessage('assistant', '⚠️ Sorry, something went wrong. Please try again.');
+        const offline = !navigator.onLine || error.message === 'offline';
+        // A fetch that rejects with TypeError never reached the server: DNS,
+        // dropped connection, or a blocked CORS preflight. That's a different
+        // problem from the server answering with an error, so say so instead of
+        // collapsing both into one vague message.
+        const unreachable = !offline && error instanceof TypeError;
+        let text;
+        if (offline) {
+            text = "📡 You're offline, so I couldn't send that. Reconnect and tap Retry.";
+        } else if (unreachable) {
+            text = "🔌 I couldn't reach the server. Check your connection and tap Retry.";
+        } else {
+            text = '⚠️ Sorry, something went wrong. Tap Retry to try again.';
+        }
+        appendError(text);
+        announce(text);
         console.error('Chat error:', error);
     } finally {
         setProcessing(false);
-        userInput.focus();
+        refocusComposer(keepFocus);
     }
-});
+}
 
 if (newChatBtn) {
     newChatBtn.addEventListener('click', () => {
         if (isProcessing) return;
         history = [];
         saveHistory();
+        clearDraft();
+        userInput.value = '';
+        autoGrow();
         chatContainer.innerHTML = '';
         appendMessage(
             'assistant',
             "👋 Fresh start! What do you need help with — meals, the schedule, an email, or a health worry?"
         );
-        userInput.focus();
+        refocusComposer();
     });
 }
 
@@ -152,7 +195,26 @@ function appendMessage(role, content) {
 
     messageDiv.appendChild(contentDiv);
     chatContainer.appendChild(messageDiv);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    scrollToLatest(true);
+    return messageDiv;
+}
+
+// Error bubble with a retry affordance — on a phone the usual cause is a dead
+// signal, not a real failure, so the user shouldn't have to retype anything.
+function appendError(text) {
+    const messageDiv = appendMessage('assistant', text);
+    const contentDiv = messageDiv.querySelector('.message-content');
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'retry-btn';
+    retry.textContent = 'Retry';
+    retry.addEventListener('click', () => {
+        if (isProcessing) return;
+        messageDiv.remove();
+        requestReply();
+    });
+    contentDiv.appendChild(retry);
+    scrollToLatest(true);
     return messageDiv;
 }
 
@@ -160,7 +222,25 @@ function appendMessage(role, content) {
 function updateMessage(messageDiv, content) {
     const contentDiv = messageDiv.querySelector('.message-content');
     if (contentDiv) contentDiv.innerHTML = formatContent(content);
+    // Don't yank the view back down if the user has scrolled up to re-read
+    // something while the reply streams in.
+    scrollToLatest(false);
+}
+
+function isNearBottom() {
+    const { scrollTop, scrollHeight, clientHeight } = chatContainer;
+    return scrollHeight - scrollTop - clientHeight < 80;
+}
+
+function scrollToLatest(force) {
+    if (!force && !isNearBottom()) return;
     chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+// Streamed text would spam a screen reader chunk by chunk, so announce
+// discrete status changes and the finished reply instead.
+function announce(text) {
+    if (srStatus) srStatus.textContent = text;
 }
 
 function escapeHtml(str) {
@@ -205,9 +285,10 @@ function formatContent(text) {
 function showTypingIndicator() {
     const el = document.createElement('div');
     el.className = 'typing-indicator';
+    el.setAttribute('aria-hidden', 'true');
     el.innerHTML = '<span></span><span></span><span></span>';
     chatContainer.appendChild(el);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    scrollToLatest(true);
     return el;
 }
 
@@ -219,7 +300,102 @@ function setProcessing(state) {
     isProcessing = state;
     sendBtn.disabled = state;
     userInput.disabled = state;
+    if (newChatBtn) newChatBtn.disabled = state;
 }
+
+/* ---------------------------------------------------------------------------
+ * Mobile ergonomics
+ * ------------------------------------------------------------------------- */
+
+// Keep the app box matched to the *visual* viewport so the composer stays above
+// the on-screen keyboard rather than being pushed off-screen behind it.
+function setupViewportFit() {
+    const vv = window.visualViewport;
+    if (!vv || !appEl) return;
+
+    appEl.classList.add('kb-aware');
+
+    const apply = () => {
+        document.documentElement.style.setProperty('--app-height', `${vv.height}px`);
+        // iOS offsets the visual viewport when the keyboard opens; reset the
+        // layout scroll so the pinned body stays aligned.
+        window.scrollTo(0, 0);
+        scrollToLatest(false);
+    };
+
+    apply();
+    vv.addEventListener('resize', apply);
+    vv.addEventListener('scroll', apply);
+}
+
+// Grow the composer with the message (to a capped height) instead of forcing
+// long requests through a one-line box.
+function autoGrow() {
+    userInput.style.height = 'auto';
+    userInput.style.height = `${userInput.scrollHeight}px`;
+}
+
+function loadDraft() {
+    try {
+        return localStorage.getItem(DRAFT_KEY) || '';
+    } catch {
+        return '';
+    }
+}
+
+function saveDraft(value) {
+    try {
+        if (value) localStorage.setItem(DRAFT_KEY, value);
+        else localStorage.removeItem(DRAFT_KEY);
+    } catch {
+        /* storage full / unavailable — non-fatal */
+    }
+}
+
+function clearDraft() {
+    saveDraft('');
+}
+
+// Only pull the keyboard back up if the composer already had focus; never steal
+// focus on first load, which would cover the welcome message.
+function refocusComposer(force) {
+    if (!force && document.activeElement === document.body) return;
+    userInput.focus();
+}
+
+function updateOnlineState() {
+    if (!offlineBanner) return;
+    offlineBanner.hidden = navigator.onLine;
+}
+
+userInput.addEventListener('input', () => {
+    autoGrow();
+    saveDraft(userInput.value);
+});
+
+// Enter sends; Shift+Enter (and mobile "return" on a wrapped line) inserts a
+// newline. Matches `enterkeyhint="send"` on the textarea.
+userInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+        e.preventDefault();
+        chatForm.requestSubmit();
+    }
+});
+
+// Tapping the composer while the keyboard animates in can leave the newest
+// message hidden; nudge it back into view once things settle.
+userInput.addEventListener('focus', () => {
+    setTimeout(() => scrollToLatest(true), 250);
+});
+
+window.addEventListener('online', () => {
+    updateOnlineState();
+    announce('Back online.');
+});
+window.addEventListener('offline', () => {
+    updateOnlineState();
+    announce("You're offline.");
+});
 
 // Register the service worker so the app is installable + works offline (PWA).
 if ('serviceWorker' in navigator) {
@@ -230,4 +406,36 @@ if ('serviceWorker' in navigator) {
     });
 }
 
+// Manifest shortcuts launch with query params; honour them then strip them so a
+// later refresh doesn't repeat the action.
+function applyLaunchParams() {
+    let params;
+    try {
+        params = new URL(window.location.href).searchParams;
+    } catch {
+        return null;
+    }
+
+    const startNew = params.get('new') === '1';
+    const prefill = params.get('q');
+    if (!startNew && !prefill) return null;
+
+    if (startNew) {
+        history = [];
+        saveHistory();
+        clearDraft();
+    }
+
+    if (window.history.replaceState) {
+        window.history.replaceState({}, '', window.location.pathname);
+    }
+    return prefill;
+}
+
+setupViewportFit();
+updateOnlineState();
+const prefill = applyLaunchParams();
+userInput.value = prefill || loadDraft();
+autoGrow();
 restoreHistory();
+scrollToLatest(true);

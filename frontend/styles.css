@@ -1,5 +1,6 @@
 :root {
     --primary: #7c3aed;
+    --primary-hover: #6d28d9;
     --primary-light: #ede9fe;
     --bg: #faf5ff;
     --surface: #ffffff;
@@ -7,8 +8,44 @@
     --text-muted: #6b7280;
     --border: #e5e7eb;
     --user-bubble: #7c3aed;
+    --user-bubble-text: #ffffff;
     --assistant-bubble: #ffffff;
     --radius: 12px;
+    /* Minimum comfortable thumb target (WCAG 2.5.5 / iOS HIG). */
+    --tap: 44px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+}
+
+/*
+ * Installed on iOS, `apple-mobile-web-app-status-bar-style: black-translucent`
+ * draws our content *underneath* the status bar. On non-notched iPhones
+ * (SE, 8) `env(safe-area-inset-top)` reports 0 even though the status bar is
+ * still overlapping, so enforce a floor that clears it. Nothing interactive
+ * lives up there any more either — "New chat" sits in the composer bar.
+ */
+@media (display-mode: standalone) {
+    :root {
+        --safe-top: max(env(safe-area-inset-top, 0px), 20px);
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --primary: #c4b5fd;
+        --primary-hover: #ddd6fe;
+        --primary-light: rgba(196, 181, 253, 0.18);
+        --bg: #14121a;
+        --surface: #1c1924;
+        --text: #ece9f1;
+        --text-muted: #a09aad;
+        --border: #322c3d;
+        --user-bubble: #6d28d9;
+        --user-bubble-text: #ffffff;
+        --assistant-bubble: #241f2e;
+    }
 }
 
 * {
@@ -17,61 +54,125 @@
     box-sizing: border-box;
 }
 
+html {
+    /* Stop the whole page rubber-banding / pull-to-refresh on touch. */
+    overscroll-behavior: none;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: var(--bg);
     color: var(--text);
-    height: 100vh;
     overflow: hidden;
+    overscroll-behavior: none;
+    /* Pinning the body stops iOS scrolling the document behind the keyboard. */
+    position: fixed;
+    inset: 0;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .app {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: 100%;
     max-width: 800px;
     margin: 0 auto;
+    padding-left: var(--safe-left);
+    padding-right: var(--safe-right);
+}
+
+/*
+ * When visualViewport is available, app.js writes the live viewport height to
+ * --app-height so the layout shrinks to sit above the on-screen keyboard
+ * instead of hiding the composer behind it.
+ */
+.app.kb-aware {
+    height: var(--app-height, 100%);
 }
 
 .header {
-    padding: 1rem 1.5rem;
+    padding: 0.75rem 1rem;
+    padding-top: calc(0.75rem + var(--safe-top));
     text-align: center;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
-    position: relative;
+    flex: none;
 }
 
+.header-text {
+    min-width: 0;
+}
+
+/* Lives in the composer bar, not the header: the top-right corner is both
+   where iOS parks the status bar icons and the worst place to reach. */
 .new-chat-btn {
-    position: absolute;
-    top: 50%;
-    right: 1rem;
-    transform: translateY(-50%);
-    padding: 0.4rem 0.75rem;
-    font-size: 0.8rem;
+    flex: none;
+    width: var(--tap);
+    height: var(--tap);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
     color: var(--primary);
     background: transparent;
     border: 1px solid var(--border);
-    border-radius: 999px;
+    border-radius: 50%;
     cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
 }
 
-.new-chat-btn:hover { background: var(--bg, #fff0f4); }
+.new-chat-btn:active { transform: scale(0.96); }
+
+.new-chat-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
 
 .header h1 {
-    font-size: 1.5rem;
+    font-size: 1.125rem;
+    line-height: 1.2;
     color: var(--primary);
+    overflow-wrap: break-word;
 }
 
 .subtitle {
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
     color: var(--text-muted);
-    margin-top: 0.25rem;
+    margin-top: 0.125rem;
+}
+
+.offline-banner {
+    flex: none;
+    padding: 0.5rem 1rem;
+    font-size: 0.8125rem;
+    text-align: center;
+    color: #7c2d12;
+    background: #fef3c7;
+    border-bottom: 1px solid #fcd34d;
+}
+
+.offline-banner[hidden] { display: none; }
+
+/* Visually hidden, still announced by screen readers. */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 .chat-container {
     flex: 1;
     overflow-y: auto;
-    padding: 1.5rem;
+    -webkit-overflow-scrolling: touch;
+    /* Keep pull-to-refresh and scroll chaining out of the conversation. */
+    overscroll-behavior-y: contain;
+    padding: 1rem;
     display: flex;
     flex-direction: column;
     gap: 1rem;
@@ -79,7 +180,7 @@ body {
 
 .message {
     display: flex;
-    max-width: 85%;
+    max-width: 92%;
     animation: fadeIn 0.3s ease;
 }
 
@@ -99,13 +200,17 @@ body {
 .message-content {
     padding: 0.75rem 1rem;
     border-radius: var(--radius);
-    line-height: 1.5;
-    font-size: 0.9375rem;
+    line-height: 1.55;
+    font-size: 1rem;
+    overflow-wrap: anywhere;
+    /* Let parents long-press to copy a recipe or a draft email. */
+    -webkit-user-select: text;
+    user-select: text;
 }
 
 .message.user .message-content {
     background: var(--user-bubble);
-    color: white;
+    color: var(--user-bubble-text);
     border-bottom-right-radius: 4px;
 }
 
@@ -165,7 +270,9 @@ body {
 }
 
 .input-area {
-    padding: 1rem 1.5rem;
+    flex: none;
+    padding: 0.75rem 1rem;
+    padding-bottom: calc(0.75rem + var(--safe-bottom));
     border-top: 1px solid var(--border);
     background: var(--surface);
 }
@@ -173,15 +280,24 @@ body {
 .input-form {
     display: flex;
     gap: 0.5rem;
-    align-items: center;
+    align-items: flex-end;
 }
 
 #userInput {
     flex: 1;
-    padding: 0.75rem 1rem;
+    min-width: 0;
+    padding: 0.6875rem 1rem;
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    font-size: 1rem;
+    /* Must stay >=16px or iOS Safari zooms the page on focus. */
+    font-size: 16px;
+    font-family: inherit;
+    line-height: 1.4;
+    color: var(--text);
+    background: var(--surface);
+    resize: none;
+    overflow-y: auto;
+    max-height: 7.5rem;
     outline: none;
     transition: border-color 0.2s;
 }
@@ -191,22 +307,23 @@ body {
     box-shadow: 0 0 0 3px var(--primary-light);
 }
 
+#userInput:disabled {
+    opacity: 0.6;
+}
+
 #sendBtn {
-    width: 44px;
-    height: 44px;
+    flex: none;
+    width: var(--tap);
+    height: var(--tap);
     border: none;
     border-radius: 50%;
     background: var(--primary);
-    color: white;
+    color: var(--surface);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: background 0.2s, transform 0.1s;
-}
-
-#sendBtn:hover {
-    background: #6d28d9;
 }
 
 #sendBtn:active {
@@ -216,6 +333,29 @@ body {
 #sendBtn:disabled {
     background: var(--text-muted);
     cursor: not-allowed;
+}
+
+.retry-btn {
+    min-height: var(--tap);
+    margin-top: 0.5rem;
+    padding: 0 1rem;
+    font-size: 0.875rem;
+    font-family: inherit;
+    color: var(--surface);
+    background: var(--primary);
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.retry-btn:active { transform: scale(0.96); }
+
+/* Hover effects only where a real pointer exists, so touch devices don't get
+   stuck in a hover state after a tap. */
+@media (hover: hover) and (pointer: fine) {
+    .new-chat-btn:hover { background: var(--bg); }
+    #sendBtn:hover { background: var(--primary-hover); }
+    .retry-btn:hover { background: var(--primary-hover); }
 }
 
 /* Scrollbar styling */
@@ -232,14 +372,36 @@ body {
     border-radius: 3px;
 }
 
-/* Responsive */
-@media (max-width: 600px) {
-    .header h1 { font-size: 1.25rem; }
-    .message { max-width: 92%; }
-    .chat-container { padding: 1rem; }
-    .input-area { padding: 0.75rem 1rem; }
+/* Roomier layout once there's space for it (tablet / desktop). */
+@media (min-width: 601px) {
+    .header {
+        padding: 1rem 1.5rem;
+        padding-top: calc(1rem + var(--safe-top));
+    }
+    .header h1 { font-size: 1.5rem; }
+    .subtitle { font-size: 0.875rem; }
+    .chat-container { padding: 1.5rem; }
+    .message { max-width: 85%; }
+    .input-area {
+        padding: 1rem 1.5rem;
+        padding-bottom: calc(1rem + var(--safe-bottom));
+    }
 }
 
-/* iPhone safe-area insets (notch / home indicator) for installed PWA */
-body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
-.input-area { padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)); }
+/* Landscape phones: claw back vertical space from the header. */
+@media (max-height: 480px) and (orientation: landscape) {
+    .subtitle { display: none; }
+    .header { padding-top: calc(0.5rem + var(--safe-top)); padding-bottom: 0.5rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    .message { animation: none; }
+    .typing-indicator span { animation: none; opacity: 0.6; }
+}

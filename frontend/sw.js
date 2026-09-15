@@ -9,7 +9,7 @@
  *    parent gets a live answer (and no stale replies).
  */
 
-const CACHE = 'mm-shell-v2';
+const CACHE = 'mm-shell-v4';
 const SHELL = [
   '/',
   '/index.html',
